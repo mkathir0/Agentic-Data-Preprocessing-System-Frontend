@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Activity, FileSearch, ShieldCheck, Database, FileCode2, PlayCircle, Download } from "lucide-react";
 import EnterpriseAIPipeline from "@/components/ui/ai-agent-pipeline";
 import { PromptInputBox } from "@/components/ui/ai-prompt-box";
+import { GradientDots } from "@/components/ui/gradient-dots";
+import { SpecialText } from "@/components/ui/special-text";
 import { uploadDataset, getJobStatus, getDownloadUrl, Job } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
@@ -64,10 +66,12 @@ export default function Home() {
     <div className="flex min-h-screen w-full flex-col bg-[#000000] text-gray-100 overflow-hidden font-sans">
       
       {/* Background Gradient matching the aesthetic */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.15]">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,240,255,1)_0%,rgba(0,0,0,0)_70%)] blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,128,255,1)_0%,rgba(0,0,0,0)_70%)] blur-[120px]" />
-      </div>
+      <GradientDots 
+        duration={30} 
+        spacing={20}
+        dotSize={6}
+        className="fixed inset-0 pointer-events-none opacity-25 mix-blend-screen z-0" 
+      />
 
       <header className="sticky top-0 z-40 flex h-16 items-center border-b border-[#333]/40 bg-black/50 px-8 backdrop-blur-xl">
         <motion.div 
@@ -102,7 +106,7 @@ export default function Home() {
                   transition={{ type: "spring", bounce: 0.6, duration: 0.8 }}
                   className="inline-block"
                 >
-                  Data Engineering,
+                  Your Data Pipelines,
                 </motion.span>
                 <br />
                 <motion.span 
@@ -110,7 +114,7 @@ export default function Home() {
                   transition={{ type: "spring", stiffness: 300, damping: 15 }}
                   className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-[#00F0FF] to-[#0080FF] drop-shadow-[0_0_15px_rgba(0,240,255,0.3)] cursor-default"
                 >
-                  Automated by Agents.
+                  <SpecialText triggerOnHover speed={20} className="font-sans font-semibold">Built Autonomously.</SpecialText>
                 </motion.span>
               </h1>
               <motion.p 

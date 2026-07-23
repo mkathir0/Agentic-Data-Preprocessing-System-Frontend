@@ -141,7 +141,7 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
         </>}
 
         {/* Trigger Node (File Upload) */}
-        <rect x="16" y="66" width="100" height="44" rx="8" fill="#1A1A1A" stroke="rgba(255,255,255,0.12)" strokeWidth="0.5" />
+        <rect x="16" y="66" width="100" height="44" rx="8" fill={isCompleted ? "#001a00" : "#1A1A1A"} stroke={isCompleted ? "#22c55e" : "rgba(255,255,255,0.12)"} strokeWidth="0.5" />
         <text x="66" y="83" textAnchor="middle" fontSize="9.5" fill="rgba(255,255,255,0.4)" fontFamily="monospace" letterSpacing=".07em">TRIGGER</text>
         <text x="66" y="100" textAnchor="middle" fontSize="12" fill="rgba(255,255,255,0.9)" fontFamily="inherit" fontWeight="500">File Upload</text>
         <text x="66" y="122" textAnchor="middle" fontSize="8.5" fill="rgba(255,255,255,0.25)" fontFamily="monospace">node-00</text>
@@ -193,7 +193,7 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
                 {dotPulsing(3) && <animate attributeName="opacity" values="0.3;1;0.3" dur="1.9s" repeatCount="indefinite" />}
               </circle>
 
-              <rect x="448" y="73" width="116" height="30" rx="7" fill="#141414" stroke="rgba(255,255,255,0.09)" strokeWidth="0.5" />
+              <rect x="448" y="73" width="116" height="30" rx="7" fill={isCompleted ? "#001a00" : "#141414"} stroke={isCompleted ? "#22c55e" : "rgba(255,255,255,0.09)"} strokeWidth="0.5" />
               <text x="490" y="91.5" textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.5)" fontFamily="inherit">Report</text>
               <circle cx={550} cy={81} r={3} fill={isCompleted ? "#22c55e" : "rgba(255,255,255,0.1)"} opacity={0.9} />
 

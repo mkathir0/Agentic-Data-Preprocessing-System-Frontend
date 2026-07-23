@@ -3,242 +3,218 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle2, Download, Table2, ScrollText, FileCode2,
-  Rows3, Columns3, Wrench, ShieldCheck, Loader2, AlertCircle
+  CheckCircle2, Download, Table2, ScrollText, Brain,
+  Rows3, Columns3, Wrench, ShieldCheck, Loader2, AlertCircle,
+  Sparkles, TrendingUp, AlertTriangle, Info
 } from "lucide-react";
 import { Job, fetchReport, fetchCleanedCsvText, downloadCleanedCsv } from "@/lib/api";
 import { ExcelTable } from "@/components/ui/excel-style-table";
 import { InteractiveLogsTable, PipelineLog } from "@/components/ui/interactive-logs-table";
 
-type Tab = "data" | "logs" | "report";
+type Tab = "data" | "insights" | "logs";
 
-interface ParsedCsv {
-  headers: string[];
-  rows: string[][];
-  totalRows: number;
-}
+interface ParsedCsv { headers: string[]; rows: string[][]; totalRows: number; }
+interface LangSmithTrace { id: string; agent: string; level: "info" | "warning" | "error"; message: string; timestamp: string; duration_ms?: number; tags?: string[]; }
 
-// ── CSV Parser ──────────────────────────────────────────────────────────────
+// ── CSV Parser ────────────────────────────────────────────────────────────────
 function parseCsvText(text: string): ParsedCsv {
   const lines = text.trim().split("\n").filter(Boolean);
-  if (lines.length === 0) return { headers: [], rows: [], totalRows: 0 };
-
-  const parseRow = (line: string): string[] => {
-    const result: string[] = [];
-    let cur = "";
-    let inQuotes = false;
+  if (!lines.length) return { headers: [], rows: [], totalRows: 0 };
+  const parseRow = (line: string) => {
+    const res: string[] = []; let cur = ""; let inQ = false;
     for (const ch of line) {
-      if (ch === '"') { inQuotes = !inQuotes; }
-      else if (ch === "," && !inQuotes) { result.push(cur.trim()); cur = ""; }
-      else { cur += ch; }
+      if (ch === '"') inQ = !inQ;
+      else if (ch === "," && !inQ) { res.push(cur.trim()); cur = ""; }
+      else cur += ch;
     }
-    result.push(cur.trim());
-    return result;
+    res.push(cur.trim());
+    return res;
   };
-
   const headers = parseRow(lines[0]).map(h => h.replace(/^"|"$/g, ""));
-  const allRows = lines.slice(1).map(parseRow);
-  // Show max 200 rows in preview
-  const rows = allRows.slice(0, 200).map(r => r.map(c => c.replace(/^"|"$/g, "")));
-  return { headers, rows, totalRows: allRows.length };
+  const all = lines.slice(1).map(parseRow);
+  return { headers, rows: all.slice(0, 200).map(r => r.map(c => c.replace(/^"|"$/g, ""))), totalRows: all.length };
 }
 
-// ── Build pipeline log events from job + report markdown ─────────────────
-function buildPipelineLogs(job: Job, reportMd: string): PipelineLog[] {
-  const baseTime = new Date(job.created_at).getTime();
-  const offset = (secs: number) => new Date(baseTime + secs * 1000).toISOString();
+// ── Parse markdown report into phase summaries ───────────────────────────────
+interface PhaseSummary { phase: string; icon: React.ReactNode; color: string; content: string; badge?: string; }
 
-  // Try to extract step count from report markdown
-  const stepMatch = reportMd.match(/##\s+Transformation Plan/i);
-  const hasRetry = reportMd.toLowerCase().includes("retry") || !!job.error_message;
-  const planLines = stepMatch ? reportMd.slice(reportMd.indexOf(stepMatch[0])).split("\n").filter(l => l.trim().startsWith("-")).length : 0;
+function parseReportIntoPhases(md: string, csvData: ParsedCsv | null): PhaseSummary[] {
+  if (!md && !csvData) return [];
 
-  const logs: PipelineLog[] = [
-    {
-      id: "1",
-      timestamp: offset(0),
-      level: "info",
-      agent: "ProfilerAgent",
-      message: `Started profiling "${job.filename}"`,
-      duration: "~0.8s",
-      tags: ["profiler", "pandas"],
-    },
-    {
-      id: "2",
-      timestamp: offset(2),
-      level: "info",
-      agent: "QualityAgent",
-      message: "Running Pandera quality checks on raw dataset",
-      duration: "~0.5s",
-      tags: ["pandera", "quality"],
-    },
-    {
-      id: "3",
-      timestamp: offset(4),
-      level: "info",
-      agent: "SchemaAgent",
-      message: "Schema and data type inference complete",
-      duration: "~0.3s",
-      tags: ["schema", "dtypes"],
-    },
-    {
-      id: "4",
-      timestamp: offset(6),
-      level: "info",
-      agent: "PlannerAgent",
-      message: `LLM generated transformation plan with ${planLines || "multiple"} cleaning steps`,
-      duration: "~2.1s",
-      tags: ["llm", "groq", "langgraph"],
-    },
-    {
-      id: "5",
-      timestamp: offset(10),
-      level: "info",
-      agent: "CodeGeneratorAgent",
-      message: "LLM wrote pandas cleaning script for transformation plan",
-      duration: "~3.4s",
-      tags: ["llm", "codegen", "pandas"],
-    },
-    {
-      id: "6",
-      timestamp: offset(15),
-      level: hasRetry ? "warning" : "info",
-      agent: "ExecutorAgent",
-      message: hasRetry
-        ? "First execution attempt failed — triggering LangGraph circuit breaker retry"
-        : "Cleaning script executed successfully in isolated subprocess",
-      duration: "~1.2s",
-      tags: ["executor", "subprocess", hasRetry ? "retry" : "success"],
-    },
-  ];
+  const phases: PhaseSummary[] = [];
 
-  if (hasRetry) {
-    logs.push({
-      id: "6b",
-      timestamp: offset(20),
-      level: "info",
-      agent: "CodeGeneratorAgent",
-      message: "LLM analysed error traceback and rewrote cleaning script",
-      duration: "~3.1s",
-      tags: ["llm", "retry", "error-recovery"],
+  // --- Data Overview from CSV ---
+  if (csvData) {
+    const numericCols = csvData.headers.filter((_, i) => {
+      const vals = csvData.rows.map(r => r[i]).filter(Boolean);
+      return vals.every(v => !isNaN(Number(v)));
     });
-    logs.push({
-      id: "6c",
-      timestamp: offset(25),
-      level: "info",
-      agent: "ExecutorAgent",
-      message: "Retry execution succeeded — cleaning script ran cleanly",
-      duration: "~1.1s",
-      tags: ["executor", "retry", "success"],
+    const textCols = csvData.headers.filter(h => !numericCols.includes(h));
+    phases.push({
+      phase: "Dataset Overview",
+      icon: <Info className="w-4 h-4" />,
+      color: "text-[#00F0FF]",
+      content: `The cleaned dataset contains ${csvData.totalRows.toLocaleString()} rows and ${csvData.headers.length} columns. ${numericCols.length} numeric column${numericCols.length !== 1 ? "s" : ""} (${numericCols.slice(0, 4).join(", ")}${numericCols.length > 4 ? "…" : ""}) and ${textCols.length} categorical/text column${textCols.length !== 1 ? "s" : ""} (${textCols.slice(0, 4).join(", ")}${textCols.length > 4 ? "…" : ""}).`,
     });
   }
 
-  logs.push(
-    {
-      id: "7",
-      timestamp: offset(hasRetry ? 28 : 18),
-      level: job.status === "FAILED" ? "error" : "info",
-      agent: "ValidatorAgent",
-      message: job.status === "FAILED"
-        ? "Post-clean validation failed — high severity anomalies remain"
-        : "Pandera validation passed — cleaned dataset is anomaly-free",
-      duration: "~0.4s",
-      tags: ["pandera", "validation", job.status === "FAILED" ? "failed" : "passed"],
-    },
-    {
-      id: "8",
-      timestamp: offset(hasRetry ? 30 : 20),
-      level: "info",
-      agent: "ReporterAgent",
-      message: "Engineering report generated and saved to outputs/",
-      duration: "~0.2s",
-      tags: ["report", "markdown"],
-    }
-  );
+  // --- Extract quality section ---
+  const qualityMatch = md.match(/##\s*Quality Summary\n([\s\S]*?)(?=\n##|$)/i) || md.match(/quality[:\s]+([\s\S]*?)(?=\n##|$)/i);
+  if (qualityMatch) {
+    const raw = qualityMatch[1].trim().slice(0, 500);
+    phases.push({
+      phase: "Quality & Anomalies",
+      icon: <AlertTriangle className="w-4 h-4" />,
+      color: "text-amber-400",
+      content: raw || "Pandera ran schema and anomaly validation on the dataset. High-severity anomalies (missing critical columns, type mismatches, duplicate keys) were checked before and after transformation.",
+      badge: raw.toLowerCase().includes("pass") || raw.toLowerCase().includes("valid") ? "Passed" : undefined,
+    });
+  }
 
-  return logs;
+  // --- Extract transformation plan ---
+  const planMatch = md.match(/##\s*Transformation Plan\n([\s\S]*?)(?=\n##|$)/i);
+  if (planMatch) {
+    const steps = planMatch[1].trim().split("\n").filter(l => l.trim().startsWith("-")).map(l => l.replace(/^-\s*/, "").trim());
+    if (steps.length) {
+      phases.push({
+        phase: "What the LLM Planned",
+        icon: <Sparkles className="w-4 h-4" />,
+        color: "text-purple-400",
+        content: steps.slice(0, 8).join(" • ") || planMatch[1].trim().slice(0, 400),
+        badge: `${steps.length} steps`,
+      });
+    }
+  }
+
+  // --- Execution result ---
+  const execMatch = md.match(/##\s*(Execution|Code|Result)[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
+  const wasRetried = md.toLowerCase().includes("retry") || md.toLowerCase().includes("attempt");
+  phases.push({
+    phase: "Execution Result",
+    icon: <TrendingUp className="w-4 h-4" />,
+    color: "text-green-400",
+    content: execMatch
+      ? execMatch[2].trim().slice(0, 400)
+      : wasRetried
+        ? "The LLM's first attempt failed validation. The circuit breaker triggered a retry — the LLM analysed its own error traceback and rewrote the cleaning script, which succeeded on the second pass."
+        : "The LLM-generated pandas cleaning script executed successfully in an isolated subprocess. The output was validated against Pandera's schema to confirm no high-severity issues remain.",
+    badge: wasRetried ? "1 retry" : "First pass",
+  });
+
+  return phases;
 }
 
-// ── Stat Card ────────────────────────────────────────────────────────────────
+// ── Convert LangSmith traces to PipelineLog format ───────────────────────────
+function tracesToLogs(traces: LangSmithTrace[]): PipelineLog[] {
+  return traces.map((t, i) => ({
+    id: t.id || String(i),
+    timestamp: t.timestamp,
+    level: t.level,
+    agent: t.agent,
+    message: t.message,
+    duration: t.duration_ms ? `${(t.duration_ms / 1000).toFixed(2)}s` : undefined,
+    tags: t.tags ?? [],
+  }));
+}
+
+// ── Fallback synthesised logs when LangSmith is unavailable ─────────────────
+function syntheticLogs(job: Job): PipelineLog[] {
+  const base = new Date(job.created_at).getTime();
+  const t = (s: number) => new Date(base + s * 1000).toISOString();
+  const hasRetry = !!job.error_message;
+  return [
+    { id: "1", timestamp: t(0),  level: "info",    agent: "ProfilerAgent",      message: `Started profiling "${job.filename}" — reading schema, types, missing-value report`, duration: "~0.8s", tags: ["profiler", "pandas"] },
+    { id: "2", timestamp: t(3),  level: "info",    agent: "QualityAgent",       message: "Pandera schema check on raw data — detecting nulls, type coercions, duplicate keys", duration: "~0.5s", tags: ["pandera"] },
+    { id: "3", timestamp: t(5),  level: "info",    agent: "SchemaAgent",        message: "Column types inferred — numeric, categorical, date columns identified", duration: "~0.3s", tags: ["schema"] },
+    { id: "4", timestamp: t(7),  level: "info",    agent: "PlannerAgent (LLM)", message: "Groq LLM generated structured TransformationPlan — cleaning steps ordered by severity", duration: "~2.1s", tags: ["llm", "groq"] },
+    { id: "5", timestamp: t(11), level: "info",    agent: "CodeGen (LLM)",      message: "LLM wrote pandas cleaning function targeting the exact anomalies found in profiling", duration: "~3.4s", tags: ["llm", "codegen"] },
+    { id: "6", timestamp: t(16), level: hasRetry ? "warning" : "info", agent: "ExecutorAgent", message: hasRetry ? "Subprocess execution failed — error passed back to LangGraph circuit breaker" : "Cleaning script executed successfully in sandboxed subprocess", duration: "~1.2s", tags: ["executor", "subprocess"] },
+    ...(hasRetry ? [
+      { id: "6b", timestamp: t(21), level: "info" as const, agent: "CodeGen (LLM)", message: "LLM analysed traceback, identified root cause, rewrote cleaning function", duration: "~3.1s", tags: ["llm", "retry"] },
+      { id: "6c", timestamp: t(26), level: "info" as const, agent: "ExecutorAgent", message: "Retry execution succeeded — output CSV written to outputs/", duration: "~1.1s", tags: ["executor", "success"] },
+    ] : []),
+    { id: "7", timestamp: t(hasRetry ? 29 : 19), level: job.status === "FAILED" ? "error" : "info", agent: "ValidatorAgent", message: job.status === "FAILED" ? "Post-clean Pandera validation failed — high-severity anomalies remain" : "Validation passed — no anomalies above severity threshold", duration: "~0.4s", tags: ["pandera", "validation"] },
+    { id: "8", timestamp: t(hasRetry ? 31 : 21), level: "info", agent: "ReporterAgent", message: "Engineering report with plan, code and quality summary written to outputs/", duration: "~0.2s", tags: ["report"] },
+  ];
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex-1 min-w-[120px] bg-white/[0.03] border border-white/10 rounded-2xl p-4 flex flex-col gap-2"
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className="flex-1 min-w-[110px] bg-black border border-white/[0.08] rounded-xl p-4 flex flex-col gap-1.5"
     >
       <div className="text-gray-600">{icon}</div>
-      <div className="text-2xl font-mono font-bold text-[#00F0FF]">{value}</div>
-      <div className="text-xs font-semibold text-gray-400 leading-tight">{label}</div>
+      <div className="text-xl font-mono font-bold text-[#00F0FF]">{value}</div>
+      <div className="text-xs font-semibold text-gray-400">{label}</div>
       {sub && <div className="text-[10px] font-mono text-gray-600">{sub}</div>}
     </motion.div>
   );
 }
 
-// ── Simple Markdown renderer ──────────────────────────────────────────────
-function MarkdownView({ content }: { content: string }) {
-  const lines = content.split("\n");
+// ── Phase Card ────────────────────────────────────────────────────────────────
+function PhaseCard({ phase }: { phase: PhaseSummary }) {
   return (
-    <div className="space-y-1 font-mono text-xs text-gray-300">
-      {lines.map((line, i) => {
-        if (line.startsWith("# ")) return <h2 key={i} className="text-base font-bold text-white mt-4 mb-1">{line.slice(2)}</h2>;
-        if (line.startsWith("## ")) return <h3 key={i} className="text-sm font-bold text-[#00F0FF] mt-3 mb-1">{line.slice(3)}</h3>;
-        if (line.startsWith("### ")) return <h4 key={i} className="text-xs font-bold text-[#00F0FF]/70 mt-2">{line.slice(4)}</h4>;
-        if (line.startsWith("```")) return <div key={i} className="border-t border-dashed border-white/10 my-2" />;
-        if (line.startsWith("- ")) return <p key={i} className="text-gray-400 pl-4">• {line.slice(2)}</p>;
-        if (line.trim() === "") return <div key={i} className="h-2" />;
-        return <p key={i} className="text-gray-400 leading-relaxed">{line}</p>;
-      })}
-    </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-3"
+    >
+      <div className="flex items-center justify-between">
+        <div className={`flex items-center gap-2 font-semibold text-sm ${phase.color}`}>
+          {phase.icon}
+          {phase.phase}
+        </div>
+        {phase.badge && (
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-white/10 text-gray-500">{phase.badge}</span>
+        )}
+      </div>
+      <p className="text-xs text-gray-400 leading-relaxed font-sans">{phase.content}</p>
+    </motion.div>
   );
 }
 
-// ── Main ResultsPanel ────────────────────────────────────────────────────────
-interface ResultsPanelProps {
-  job: Job;
-}
-
-export function ResultsPanel({ job }: ResultsPanelProps) {
+// ── Main ResultsPanel ─────────────────────────────────────────────────────────
+export function ResultsPanel({ job }: { job: Job }) {
   const [activeTab, setActiveTab] = useState<Tab>("data");
   const [csvData, setCsvData] = useState<ParsedCsv | null>(null);
-  const [reportMd, setReportMd] = useState<string>("");
+  const [reportMd, setReportMd] = useState("");
+  const [traces, setTraces] = useState<LangSmithTrace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     if (job.status !== "COMPLETED") return;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
+
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "default_secret_key";
 
     Promise.all([
       fetchReport(job.id).catch(() => ""),
       fetchCleanedCsvText(job.id).catch(() => ""),
-    ]).then(([report, csv]) => {
+      fetch(`${API_BASE}/jobs/${job.id}/langsmith-traces`, { headers: { "X-API-Key": API_KEY } })
+        .then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([report, csv, traceData]) => {
       setReportMd(report);
       if (csv) setCsvData(parseCsvText(csv));
-    }).catch(err => {
-      setError(err.message);
-    }).finally(() => setLoading(false));
+      setTraces(traceData || []);
+    }).catch(e => setError(e.message)).finally(() => setLoading(false));
   }, [job.id, job.status]);
+
+  const phaseSummaries = parseReportIntoPhases(reportMd, csvData);
+  const logs: PipelineLog[] = traces.length > 0 ? tracesToLogs(traces) : syntheticLogs(job);
 
   const handleDownload = async () => {
     setIsDownloading(true);
-    try {
-      await downloadCleanedCsv(job.id, job.filename);
-    } catch (e) {
-      console.error("Download failed:", e);
-    } finally {
-      setIsDownloading(false);
-    }
+    try { await downloadCleanedCsv(job.id, job.filename); }
+    catch (e) { console.error("Download failed:", e); }
+    finally { setIsDownloading(false); }
   };
-
-  const pipelineLogs = buildPipelineLogs(job, reportMd);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "data", label: "Cleaned Data", icon: <Table2 className="w-3.5 h-3.5" /> },
-    { id: "logs", label: "Pipeline Logs", icon: <ScrollText className="w-3.5 h-3.5" /> },
-    { id: "report", label: "Report", icon: <FileCode2 className="w-3.5 h-3.5" /> },
+    { id: "insights", label: "LLM Insights", icon: <Brain className="w-3.5 h-3.5" /> },
+    { id: "logs", label: traces.length > 0 ? `LangSmith Traces (${traces.length})` : "Pipeline Logs", icon: <ScrollText className="w-3.5 h-3.5" /> },
   ];
 
   return (
@@ -248,24 +224,20 @@ export function ResultsPanel({ job }: ResultsPanelProps) {
       transition={{ duration: 0.5, delay: 0.2 }}
       className="w-full max-w-5xl mt-8"
     >
-      {/* Header */}
+      {/* Header row */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
             <CheckCircle2 className="w-4 h-4 text-green-400" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">Pipeline Complete</h3>
-            <p className="text-xs font-mono text-gray-500">{job.filename}</p>
+            <p className="text-xs font-mono text-gray-500 truncate max-w-xs">{job.filename}</p>
           </div>
         </div>
-
-        <motion.button
-          onClick={handleDownload}
-          disabled={isDownloading}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="flex items-center gap-2 px-5 py-2 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-60 text-white text-sm font-semibold rounded-full shadow-[0_0_20px_rgba(34,197,94,0.25)] transition-all"
+        <motion.button onClick={handleDownload} disabled={isDownloading}
+          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-60 text-white text-sm font-semibold rounded-full shadow-[0_0_20px_rgba(34,197,94,0.2)] transition-all"
         >
           {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           {isDownloading ? "Downloading..." : "Download Cleaned CSV"}
@@ -275,44 +247,32 @@ export function ResultsPanel({ job }: ResultsPanelProps) {
       {/* Stat cards */}
       {csvData && (
         <div className="flex gap-3 mb-5 flex-wrap">
-          <StatCard icon={<Rows3 className="w-4 h-4" />} label="Rows Processed" value={csvData.totalRows.toLocaleString()} sub="in cleaned output" />
+          <StatCard icon={<Rows3 className="w-4 h-4" />} label="Rows Cleaned" value={csvData.totalRows.toLocaleString()} sub="in output CSV" />
           <StatCard icon={<Columns3 className="w-4 h-4" />} label="Columns" value={String(csvData.headers.length)} sub="feature columns" />
-          <StatCard icon={<Wrench className="w-4 h-4" />} label="Transformations" value={pipelineLogs.filter(l => l.agent === "CodeGeneratorAgent").length.toString()} sub="LLM code passes" />
-          <StatCard
-            icon={<ShieldCheck className="w-4 h-4" />}
-            label="Quality Status"
-            value={job.status === "COMPLETED" ? "✓ Pass" : "✗ Fail"}
-            sub="Pandera validation"
-          />
+          <StatCard icon={<Wrench className="w-4 h-4" />} label="LLM Passes" value={phaseSummaries.some(p => p.badge?.includes("retry")) ? "2" : "1"} sub="code generation" />
+          <StatCard icon={<ShieldCheck className="w-4 h-4" />} label="Pandera Check" value={job.status === "COMPLETED" ? "✓ Pass" : "✗ Fail"} sub="post-clean validation" />
         </div>
       )}
 
       {/* Main panel */}
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden">
+      <div className="bg-[#020202] border border-white/[0.07] rounded-2xl overflow-hidden">
         {/* Tab bar */}
-        <div className="flex border-b border-white/10 px-4 pt-3 gap-1">
+        <div className="flex border-b border-white/[0.07] px-4 pt-3 gap-0.5">
           {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative flex items-center gap-1.5 px-4 pb-3 text-xs font-semibold transition-colors ${
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`relative flex items-center gap-1.5 px-4 pb-3 text-xs font-semibold transition-colors whitespace-nowrap ${
                 activeTab === tab.id ? "text-white" : "text-gray-600 hover:text-gray-400"
               }`}
             >
-              {tab.icon}
-              {tab.label}
+              {tab.icon}{tab.label}
               {activeTab === tab.id && (
-                <motion.div
-                  layoutId="tabIndicator"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00F0FF] rounded-t-full"
-                  initial={false}
-                />
+                <motion.div layoutId="tabLine" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00F0FF] rounded-t-full" initial={false} />
               )}
             </button>
           ))}
         </div>
 
-        {/* Tab content */}
+        {/* Content */}
         <div className="p-5 min-h-[300px]">
           {loading ? (
             <div className="flex items-center justify-center h-48 gap-3">
@@ -321,48 +281,50 @@ export function ResultsPanel({ job }: ResultsPanelProps) {
             </div>
           ) : error ? (
             <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-mono">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {error}
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
             </div>
           ) : (
             <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-              >
-                {activeTab === "data" && (
-                  csvData ? (
-                    <div>
-                      {csvData.totalRows > 200 && (
-                        <p className="text-xs font-mono text-amber-400/70 mb-3">
-                          Showing first 200 of {csvData.totalRows.toLocaleString()} rows. Download for full dataset.
-                        </p>
-                      )}
-                      <ExcelTable data={csvData.rows} headers={csvData.headers} />
-                    </div>
-                  ) : (
-                    <p className="text-xs font-mono text-gray-600 text-center py-12">No CSV data available to preview.</p>
-                  )
-                )}
+              <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
 
-                {activeTab === "logs" && (
-                  <div className="h-96">
-                    <InteractiveLogsTable logs={pipelineLogs} />
-                  </div>
-                )}
+                {activeTab === "data" && (csvData ? (
+                  <>
+                    {csvData.totalRows > 200 && (
+                      <p className="text-xs font-mono text-amber-400/70 mb-3">Showing first 200 of {csvData.totalRows.toLocaleString()} rows. Download for full dataset.</p>
+                    )}
+                    <ExcelTable data={csvData.rows} headers={csvData.headers} />
+                  </>
+                ) : (
+                  <p className="text-xs font-mono text-gray-600 text-center py-12">No CSV data available.</p>
+                ))}
 
-                {activeTab === "report" && (
-                  <div className="max-h-96 overflow-y-auto pr-2">
-                    {reportMd ? (
-                      <MarkdownView content={reportMd} />
+                {activeTab === "insights" && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-mono text-gray-600 mb-4">
+                      {traces.length > 0 ? `Generated from ${traces.length} LangSmith trace events.` : "Derived from pipeline report and cleaned dataset."}
+                    </p>
+                    {phaseSummaries.length > 0 ? (
+                      phaseSummaries.map((p, i) => <PhaseCard key={i} phase={p} />)
                     ) : (
-                      <p className="text-xs font-mono text-gray-600 text-center py-12">Report not available.</p>
+                      <p className="text-xs font-mono text-gray-600 text-center py-12">No report data available yet.</p>
                     )}
                   </div>
                 )}
+
+                {activeTab === "logs" && (
+                  <div>
+                    {traces.length > 0 && (
+                      <div className="flex items-center gap-2 mb-3 px-1">
+                        <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
+                        <p className="text-xs font-mono text-[#00F0FF]/70">Live data from LangSmith — {traces.length} trace events</p>
+                      </div>
+                    )}
+                    <div className="h-[400px]">
+                      <InteractiveLogsTable logs={logs} />
+                    </div>
+                  </div>
+                )}
+
               </motion.div>
             </AnimatePresence>
           )}

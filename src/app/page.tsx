@@ -73,19 +73,7 @@ export default function Home() {
         className="fixed inset-0 pointer-events-none opacity-25 mix-blend-screen z-0" 
       />
 
-      <header className="sticky top-0 z-40 flex h-16 items-center border-b border-[#333]/40 bg-black/50 px-8 backdrop-blur-xl">
-        <motion.div 
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          transition={{ type: "spring", stiffness: 400, damping: 10 }}
-          className="flex items-center gap-3 font-bold text-lg tracking-tight text-white cursor-pointer"
-        >
-          <div className="bg-[#00F0FF] p-1.5 rounded-md shadow-[0_0_15px_rgba(0,240,255,0.5)]">
-            <Sparkles className="h-4 w-4 text-black" />
-          </div>
-          <span>Nexus Data Engineer</span>
-        </motion.div>
-      </header>
+
 
       <main className="flex-1 flex flex-col items-center justify-center p-8 relative z-10 w-full max-w-5xl mx-auto min-h-[calc(100vh-64px)]">
         

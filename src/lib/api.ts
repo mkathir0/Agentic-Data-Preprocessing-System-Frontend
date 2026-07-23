@@ -1,5 +1,5 @@
-const API_BASE_URL = "http://localhost:8000/api";
-const API_KEY = "default_secret_key"; // Matches backend default
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "default_secret_key";
 
 export interface Job {
   id: string;

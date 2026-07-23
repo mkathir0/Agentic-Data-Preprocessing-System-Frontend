@@ -304,7 +304,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
             ref={ref}
             className={cn(
               "rounded-3xl border border-[#444444] bg-[#1F2023]/80 backdrop-blur-xl p-2 shadow-[0_8px_30px_rgba(0,0,0,0.24)] transition-all duration-300",
-              isLoading && "border-[#F55702]/70 shadow-[0_0_15px_rgba(245,87,2,0.3)]",
+              isLoading && "border-[#00F0FF]/70 shadow-[0_0_15px_rgba(0,240,255,0.3)]",
               className
             )}
             onDragOver={onDragOver}
@@ -402,7 +402,7 @@ const PromptInputAction: React.FC<PromptInputActionProps> = ({
 const CustomDivider: React.FC = () => (
   <div className="relative h-6 w-[1.5px] mx-1">
     <div
-      className="absolute inset-0 bg-gradient-to-t from-transparent via-[#F55702]/50 to-transparent rounded-full"
+      className="absolute inset-0 bg-gradient-to-t from-transparent via-[#00F0FF]/50 to-transparent rounded-full"
       style={{
         clipPath: "polygon(0% 0%, 100% 0%, 100% 40%, 140% 50%, 100% 60%, 100% 100%, 0% 100%, 0% 60%, -40% 50%, 0% 40%)",
       }}
@@ -502,7 +502,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
           <div className="flex flex-wrap gap-2 p-0 pb-2 px-2 transition-all duration-300">
             {files.map((file, index) => (
               <div key={index} className="relative group bg-[#2A2A2A] rounded-lg px-3 py-2 flex items-center gap-2 border border-[#444]">
-                <div className="bg-[#F55702]/20 p-1.5 rounded-md text-[#F55702]">
+                <div className="bg-[#00F0FF]/20 p-1.5 rounded-md text-[#00F0FF]">
                   <FolderCode className="w-4 h-4" />
                 </div>
                 <span className="text-sm font-medium text-white/90 truncate max-w-[200px]">{file.name}</span>
@@ -661,7 +661,7 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
               className={cn(
                 "h-8 w-8 rounded-full transition-all duration-200 shadow-sm",
                 hasContent
-                  ? "bg-[#F55702] hover:bg-[#F55702]/80 text-white shadow-[#F55702]/30 shadow-lg"
+                  ? "bg-[#00F0FF] hover:bg-[#00F0FF]/80 text-black shadow-[#00F0FF]/30 shadow-lg"
                   : "bg-[#333] hover:bg-[#444] text-[#9CA3AF] hover:text-[#D1D5DB]"
               )}
               onClick={() => {

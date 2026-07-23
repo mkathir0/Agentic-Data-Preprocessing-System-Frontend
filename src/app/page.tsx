@@ -65,22 +65,22 @@ export default function Home() {
       
       {/* Background Gradient matching the aesthetic */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.15]">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(245,87,2,1)_0%,rgba(0,0,0,0)_70%)] blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(245,120,2,1)_0%,rgba(0,0,0,0)_70%)] blur-[120px]" />
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,240,255,1)_0%,rgba(0,0,0,0)_70%)] blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(0,128,255,1)_0%,rgba(0,0,0,0)_70%)] blur-[120px]" />
       </div>
 
       <header className="sticky top-0 z-40 flex h-16 items-center border-b border-[#333]/40 bg-black/50 px-8 backdrop-blur-xl">
-        <div className="flex items-center gap-3 font-bold text-lg tracking-tight text-white">
-          <div className="bg-[#F55702] p-1.5 rounded-md">
-            <Sparkles className="h-4 w-4 text-white" />
+        <motion.div 
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 400, damping: 10 }}
+          className="flex items-center gap-3 font-bold text-lg tracking-tight text-white cursor-pointer"
+        >
+          <div className="bg-[#00F0FF] p-1.5 rounded-md shadow-[0_0_15px_rgba(0,240,255,0.5)]">
+            <Sparkles className="h-4 w-4 text-black" />
           </div>
           <span>Nexus Data Engineer</span>
-        </div>
-        <nav className="ml-auto flex items-center gap-8 text-sm font-medium">
-          <a href="#" className="text-white transition-colors border-b-2 border-[#F55702] py-5">Pipelines</a>
-          <a href="#" className="text-gray-400 hover:text-white transition-colors py-5">Knowledge Base</a>
-          <a href="#" className="text-gray-400 hover:text-white transition-colors py-5">Settings</a>
-        </nav>
+        </motion.div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-8 relative z-10 w-full max-w-5xl mx-auto min-h-[calc(100vh-64px)]">
@@ -96,15 +96,32 @@ export default function Home() {
               className="flex flex-col items-center w-full max-w-3xl -mt-16"
             >
               <h1 className="text-5xl md:text-6xl font-semibold tracking-tight text-white mb-6 text-center leading-tight">
-                Data Engineering, <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F55702] to-[#FF8A00]">
+                <motion.span
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: "spring", bounce: 0.6, duration: 0.8 }}
+                  className="inline-block"
+                >
+                  Data Engineering,
+                </motion.span>
+                <br />
+                <motion.span 
+                  whileHover={{ scale: 1.05, rotate: -1 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                  className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-[#00F0FF] to-[#0080FF] drop-shadow-[0_0_15px_rgba(0,240,255,0.3)] cursor-default"
+                >
                   Automated by Agents.
-                </span>
+                </motion.span>
               </h1>
-              <p className="text-lg text-gray-400 text-center mb-12 max-w-xl leading-relaxed">
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="text-lg text-gray-400 text-center mb-12 max-w-xl leading-relaxed"
+              >
                 Upload your raw datasets and provide natural language instructions. 
                 Our specialized LLM agents will profile, clean, and transform the data autonomously.
-              </p>
+              </motion.p>
 
               <div className="w-full max-w-2xl">
                 <PromptInputBox 

@@ -30,7 +30,7 @@ function AnimatedDot({
   opacity: number
 }) {
   return (
-    <circle r={size} fill="#F55702" opacity={opacity}>
+    <circle r={size} fill="#00F0FF" opacity={opacity}>
       <animateMotion
         dur={`${duration}s`}
         repeatCount="indefinite"
@@ -167,7 +167,7 @@ export default function EnterpriseAIPipeline() {
             <path
               d="M2 1.5L7.5 5L2 8.5"
               fill="none"
-              stroke="rgba(245,87,2,0.6)"
+              stroke="rgba(0,240,255,0.6)"
               strokeWidth="1.6"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -176,11 +176,11 @@ export default function EnterpriseAIPipeline() {
         </defs>
 
         {/* Connection Paths */}
-        <path d={paths.p1} fill="none" stroke="rgba(245,87,2,0.22)" strokeWidth="1.5" strokeDasharray="3 5" markerEnd="url(#ma)" />
-        <path d={paths.p2} fill="none" stroke="rgba(245,87,2,0.22)" strokeWidth="1.5" strokeDasharray="3 5" markerEnd="url(#ma)" />
-        <path d={paths.p3} fill="none" stroke="rgba(245,87,2,0.15)" strokeWidth="1.5" strokeDasharray="3 5" />
-        <path d={paths.p4} fill="none" stroke="rgba(245,87,2,0.15)" strokeWidth="1.5" strokeDasharray="3 5" />
-        <path d={paths.p5} fill="none" stroke="rgba(245,87,2,0.15)" strokeWidth="1.5" strokeDasharray="3 5" />
+        <path d={paths.p1} fill="none" stroke="rgba(0,240,255,0.22)" strokeWidth="1.5" strokeDasharray="3 5" markerEnd="url(#ma)" />
+        <path d={paths.p2} fill="none" stroke="rgba(0,240,255,0.22)" strokeWidth="1.5" strokeDasharray="3 5" markerEnd="url(#ma)" />
+        <path d={paths.p3} fill="none" stroke="rgba(0,240,255,0.15)" strokeWidth="1.5" strokeDasharray="3 5" />
+        <path d={paths.p4} fill="none" stroke="rgba(0,240,255,0.15)" strokeWidth="1.5" strokeDasharray="3 5" />
+        <path d={paths.p5} fill="none" stroke="rgba(0,240,255,0.15)" strokeWidth="1.5" strokeDasharray="3 5" />
 
         {/* Animated dots along paths */}
         <AnimatedDot path={paths.p1} duration={1.05} delay={0} size={2.5} opacity={1} />
@@ -212,14 +212,14 @@ export default function EnterpriseAIPipeline() {
         <text x="213" y="122" textAnchor="middle" fontSize="8.5" fill="rgba(255,255,255,0.25)" fontFamily="monospace">pinecone</text>
 
         {/* LLM Agent Node */}
-        <rect x="306" y="53" width="105" height="70" rx="10" fill="#1C0F08" stroke="#F55702" strokeWidth="1" />
-        <rect x="318" y="53.5" width="80" height="1" rx="0.5" fill="rgba(245,87,2,0.5)" />
-        <text x="358" y="78" textAnchor="middle" fontSize="9.5" fill="rgba(245,120,2,0.8)" fontFamily="inherit" letterSpacing=".07em">LLM AGENT</text>
+        <rect x="306" y="53" width="105" height="70" rx="10" fill="#020C17" stroke="#00F0FF" strokeWidth="1" />
+        <rect x="318" y="53.5" width="80" height="1" rx="0.5" fill="rgba(0,240,255,0.5)" />
+        <text x="358" y="78" textAnchor="middle" fontSize="9.5" fill="rgba(0,240,255,0.8)" fontFamily="inherit" letterSpacing=".07em">LLM AGENT</text>
         <text x="358" y="97" textAnchor="middle" fontSize="13" fill="#fff" fontFamily="inherit" fontWeight="600">Processing</text>
-        <PulsingDot cx={346} cy={113} color="#F55702" duration={1.2} delay={0} />
-        <PulsingDot cx={358} cy={113} color="#F55702" duration={1.2} delay={0.4} />
-        <PulsingDot cx={370} cy={113} color="#F55702" duration={1.2} delay={0.8} />
-        <text x="358" y="139" textAnchor="middle" fontSize="8.5" fill="rgba(245,87,2,0.5)" fontFamily="monospace">llama-3.3-70b</text>
+        <PulsingDot cx={346} cy={113} color="#00F0FF" duration={1.2} delay={0} />
+        <PulsingDot cx={358} cy={113} color="#00F0FF" duration={1.2} delay={0.4} />
+        <PulsingDot cx={370} cy={113} color="#00F0FF" duration={1.2} delay={0.8} />
+        <text x="358" y="139" textAnchor="middle" fontSize="8.5" fill="rgba(0,240,255,0.5)" fontFamily="monospace">llama-3.3-70b</text>
 
         {/* Output Nodes */}
         <rect x="448" y="35" width="116" height="30" rx="7" fill="#141414" stroke="rgba(255,255,255,0.09)" strokeWidth="0.5" />
@@ -238,7 +238,7 @@ export default function EnterpriseAIPipeline() {
       {/* Message Display */}
       <div className="border-t border-white/[0.06] px-[18px] py-[9px] h-[52px]">
         <div className="flex gap-2 items-start h-full">
-          <span className="text-[#F55702]/80 font-mono text-[13px] leading-[1.5] shrink-0">›</span>
+          <span className="text-[#00F0FF]/80 font-mono text-[13px] leading-[1.5] shrink-0">›</span>
           <div className="relative flex-1 overflow-hidden h-full">
             <AnimatePresence mode="wait">
               <motion.div
@@ -274,7 +274,7 @@ export default function EnterpriseAIPipeline() {
         </div>
         <div className="ml-auto text-right">
           <div className="text-[9px] text-white/[0.25] tracking-[0.09em] mb-[3px] font-semibold">STACK</div>
-          <div className="text-[10px] text-[#F55702]/80 font-mono font-medium">Groq Llama 3.3 · LangGraph</div>
+          <div className="text-[10px] text-[#00F0FF]/80 font-mono font-medium">Groq Llama 3.3 · LangGraph</div>
         </div>
       </div>
     </div>

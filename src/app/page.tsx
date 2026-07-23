@@ -1,65 +1,156 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Sparkles, Activity, FileSearch, ShieldCheck, Database, FileCode2, PlayCircle, Scale, Download } from "lucide-react";
+import { DragDropZone } from "@/components/dashboard/DragDropZone";
+import { PipelineVisualizer, AgentNode, AgentState } from "@/components/dashboard/PipelineVisualizer";
+import { ReportPanel } from "@/components/dashboard/ReportPanel";
+import { uploadDataset, getJobStatus, getDownloadUrl, Job } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+
+const INITIAL_NODES: AgentNode[] = [
+  { id: "profile_and_plan", name: "Profile & Plan", icon: <FileSearch className="w-6 h-6" />, state: "idle" },
+  { id: "generate", name: "Code Gen", icon: <FileCode2 className="w-6 h-6" />, state: "idle" },
+  { id: "execute", name: "Execute", icon: <PlayCircle className="w-6 h-6" />, state: "idle" },
+  { id: "validate", name: "Validate", icon: <ShieldCheck className="w-6 h-6" />, state: "idle" },
+];
 
 export default function Home() {
+  const [hasStarted, setHasStarted] = useState(false);
+  const [nodes, setNodes] = useState<AgentNode[]>(INITIAL_NODES);
+  const [selectedNode, setSelectedNode] = useState<AgentNode | null>(null);
+  const [activeJob, setActiveJob] = useState<Job | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+
+  useEffect(() => {
+    if (!isPolling) return;
+
+    let currentStepIndex = 0;
+    
+    setNodes(INITIAL_NODES.map((n, i) => ({
+      ...n, 
+      state: (i === 0 ? "running" : "idle") as AgentState
+    })));
+
+    const visualInterval = setInterval(() => {
+      setNodes((prev) => {
+        const next = [...prev];
+        if (currentStepIndex < next.length - 1) {
+          next[currentStepIndex].state = "completed";
+          currentStepIndex++;
+          next[currentStepIndex].state = "running";
+        }
+        return next;
+      });
+    }, 15000); 
+
+    return () => clearInterval(visualInterval);
+  }, [isPolling]);
+
+  useEffect(() => {
+    if (!activeJob || !isPolling) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const job = await getJobStatus(activeJob.id);
+        setActiveJob(job);
+        
+        if (job.status === "COMPLETED" || job.status === "FAILED") {
+          setIsPolling(false);
+          setNodes((prev) => prev.map(n => ({
+            ...n,
+            state: job.status === "COMPLETED" ? "completed" : "error"
+          })));
+        }
+      } catch (e) {
+        console.error("Polling error:", e);
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [activeJob, isPolling]);
+
+  const handleFileAccepted = async (file: File) => {
+    try {
+      setHasStarted(true);
+      const job = await uploadDataset(file);
+      setActiveJob(job);
+      setIsPolling(true);
+    } catch (error) {
+      console.error("Failed to upload:", error);
+      alert("Upload failed. Make sure the backend is running.");
+      setHasStarted(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (activeJob) {
+      window.location.href = getDownloadUrl(activeJob.id);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex min-h-screen w-full flex-col bg-background text-foreground overflow-hidden">
+      <header className="sticky top-0 z-40 flex h-16 items-center border-b border-border/40 bg-background/80 px-6 backdrop-blur-md">
+        <div className="flex items-center gap-2 font-bold text-lg">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <span>AI Data Engineer</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        <nav className="ml-auto flex items-center gap-6 text-sm font-medium">
+          <a href="#" className="text-primary transition-colors border-b-2 border-primary py-5">Pipelines</a>
+          <a href="#" className="text-muted-foreground hover:text-foreground transition-colors py-5">Datasets</a>
+        </nav>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center p-8">
+        <motion.div layout className="text-center mt-12 mb-8 max-w-2xl">
+          <motion.h1 layout className="text-4xl font-extrabold tracking-tight sm:text-5xl mb-4">
+            Autonomous ETL
+          </motion.h1>
+          <motion.p layout className="text-lg text-muted-foreground">
+            Drop your messy CSVs. Let the agent swarm clean, profile, and transform it.
+          </motion.p>
+        </motion.div>
+
+        {!hasStarted && (
+          <DragDropZone onFileAccepted={handleFileAccepted} />
+        )}
+
+        <AnimatePresence>
+          {hasStarted && (
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="w-full mt-8"
+            >
+              <div className="flex items-center justify-between mb-4 w-full max-w-5xl mx-auto px-4">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary animate-pulse" />
+                  <h2 className="text-sm font-semibold tracking-wide uppercase text-primary">Live Orchestrator Loop</h2>
+                </div>
+                
+                {activeJob?.status === "COMPLETED" && (
+                  <Button onClick={handleDownload} className="gap-2">
+                    <Download className="h-4 w-4" /> Download Cleaned Dataset
+                  </Button>
+                )}
+              </div>
+              
+              <PipelineVisualizer nodes={nodes} onNodeClick={setSelectedNode} />
+
+              {activeJob?.error_message && (
+                <div className="max-w-2xl mx-auto mt-8 p-4 bg-destructive/10 border border-destructive rounded-lg text-destructive text-sm font-mono">
+                  {activeJob.error_message}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
+
+      <ReportPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
     </div>
   );
 }

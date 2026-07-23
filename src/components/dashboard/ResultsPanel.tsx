@@ -3,20 +3,38 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CheckCircle2, Download, Table2, ScrollText, Brain,
+  CheckCircle2, Download, Table2, ScrollText, BarChart3,
   Rows3, Columns3, Wrench, ShieldCheck, Loader2, AlertCircle,
-  Sparkles, TrendingUp, AlertTriangle, Info
+  ScanSearch, Brain, Code2, CheckCheck
 } from "lucide-react";
-import { Job, fetchReport, fetchCleanedCsvText, downloadCleanedCsv } from "@/lib/api";
+import { Job, fetchCleanedCsvText, downloadCleanedCsv } from "@/lib/api";
 import { ExcelTable } from "@/components/ui/excel-style-table";
 import { InteractiveLogsTable, PipelineLog } from "@/components/ui/interactive-logs-table";
 
 type Tab = "data" | "insights" | "logs";
 
 interface ParsedCsv { headers: string[]; rows: string[][]; totalRows: number; }
-interface LangSmithTrace { id: string; agent: string; level: "info" | "warning" | "error"; message: string; timestamp: string; duration_ms?: number; tags?: string[]; }
 
-// ── CSV Parser ────────────────────────────────────────────────────────────────
+interface InsightsPhase {
+  phase: string;
+  color: "cyan" | "purple" | "green" | "amber" | "red";
+  status: "completed" | "failed";
+  lines: string[];
+  badge?: string;
+}
+
+interface InsightsData {
+  job_id: string;
+  filename: string;
+  phases: InsightsPhase[];
+}
+
+interface LangSmithTrace {
+  id: string; agent: string; level: "info" | "warning" | "error";
+  message: string; timestamp: string; duration_ms?: number; tags?: string[];
+}
+
+// ── CSV Parser ──────────────────────────────────────────────────────────────
 function parseCsvText(text: string): ParsedCsv {
   const lines = text.trim().split("\n").filter(Boolean);
   if (!lines.length) return { headers: [], rows: [], totalRows: 0 };
@@ -35,107 +53,73 @@ function parseCsvText(text: string): ParsedCsv {
   return { headers, rows: all.slice(0, 200).map(r => r.map(c => c.replace(/^"|"$/g, ""))), totalRows: all.length };
 }
 
-// ── Parse markdown report into phase summaries ───────────────────────────────
-interface PhaseSummary { phase: string; icon: React.ReactNode; color: string; content: string; badge?: string; }
-
-function parseReportIntoPhases(md: string, csvData: ParsedCsv | null): PhaseSummary[] {
-  if (!md && !csvData) return [];
-
-  const phases: PhaseSummary[] = [];
-
-  // --- Data Overview from CSV ---
-  if (csvData) {
-    const numericCols = csvData.headers.filter((_, i) => {
-      const vals = csvData.rows.map(r => r[i]).filter(Boolean);
-      return vals.every(v => !isNaN(Number(v)));
-    });
-    const textCols = csvData.headers.filter(h => !numericCols.includes(h));
-    phases.push({
-      phase: "Dataset Overview",
-      icon: <Info className="w-4 h-4" />,
-      color: "text-[#00F0FF]",
-      content: `The cleaned dataset contains ${csvData.totalRows.toLocaleString()} rows and ${csvData.headers.length} columns. ${numericCols.length} numeric column${numericCols.length !== 1 ? "s" : ""} (${numericCols.slice(0, 4).join(", ")}${numericCols.length > 4 ? "…" : ""}) and ${textCols.length} categorical/text column${textCols.length !== 1 ? "s" : ""} (${textCols.slice(0, 4).join(", ")}${textCols.length > 4 ? "…" : ""}).`,
-    });
-  }
-
-  // --- Extract quality section ---
-  const qualityMatch = md.match(/##\s*Quality Summary\n([\s\S]*?)(?=\n##|$)/i) || md.match(/quality[:\s]+([\s\S]*?)(?=\n##|$)/i);
-  if (qualityMatch) {
-    const raw = qualityMatch[1].trim().slice(0, 500);
-    phases.push({
-      phase: "Quality & Anomalies",
-      icon: <AlertTriangle className="w-4 h-4" />,
-      color: "text-amber-400",
-      content: raw || "Pandera ran schema and anomaly validation on the dataset. High-severity anomalies (missing critical columns, type mismatches, duplicate keys) were checked before and after transformation.",
-      badge: raw.toLowerCase().includes("pass") || raw.toLowerCase().includes("valid") ? "Passed" : undefined,
-    });
-  }
-
-  // --- Extract transformation plan ---
-  const planMatch = md.match(/##\s*Transformation Plan\n([\s\S]*?)(?=\n##|$)/i);
-  if (planMatch) {
-    const steps = planMatch[1].trim().split("\n").filter(l => l.trim().startsWith("-")).map(l => l.replace(/^-\s*/, "").trim());
-    if (steps.length) {
-      phases.push({
-        phase: "What the LLM Planned",
-        icon: <Sparkles className="w-4 h-4" />,
-        color: "text-purple-400",
-        content: steps.slice(0, 8).join(" • ") || planMatch[1].trim().slice(0, 400),
-        badge: `${steps.length} steps`,
-      });
-    }
-  }
-
-  // --- Execution result ---
-  const execMatch = md.match(/##\s*(Execution|Code|Result)[^\n]*\n([\s\S]*?)(?=\n##|$)/i);
-  const wasRetried = md.toLowerCase().includes("retry") || md.toLowerCase().includes("attempt");
-  phases.push({
-    phase: "Execution Result",
-    icon: <TrendingUp className="w-4 h-4" />,
-    color: "text-green-400",
-    content: execMatch
-      ? execMatch[2].trim().slice(0, 400)
-      : wasRetried
-        ? "The LLM's first attempt failed validation. The circuit breaker triggered a retry — the LLM analysed its own error traceback and rewrote the cleaning script, which succeeded on the second pass."
-        : "The LLM-generated pandas cleaning script executed successfully in an isolated subprocess. The output was validated against Pandera's schema to confirm no high-severity issues remain.",
-    badge: wasRetried ? "1 retry" : "First pass",
-  });
-
-  return phases;
+// ── Markdown-aware line renderer ────────────────────────────────────────────
+function RichLine({ text }: { text: string }) {
+  // Bold **text**
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return (
+    <span>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**"))
+          return <strong key={i} className="text-white font-semibold">{part.slice(2, -2)}</strong>;
+        if (part.startsWith("`") && part.endsWith("`"))
+          return <code key={i} className="font-mono text-[10px] bg-white/5 px-1 py-0.5 rounded text-[#00F0FF]/90">{part.slice(1, -1)}</code>;
+        // Handle italic *text*
+        if (part.startsWith("*") && part.endsWith("*") && !part.startsWith("**"))
+          return <em key={i} className="text-gray-300 italic">{part.slice(1, -1)}</em>;
+        return part;
+      })}
+    </span>
+  );
 }
 
-// ── Convert LangSmith traces to PipelineLog format ───────────────────────────
-function tracesToLogs(traces: LangSmithTrace[]): PipelineLog[] {
-  return traces.map((t, i) => ({
-    id: t.id || String(i),
-    timestamp: t.timestamp,
-    level: t.level,
-    agent: t.agent,
-    message: t.message,
-    duration: t.duration_ms ? `${(t.duration_ms / 1000).toFixed(2)}s` : undefined,
-    tags: t.tags ?? [],
-  }));
-}
+const COLOR_MAP = {
+  cyan:   { border: "border-[#00F0FF]/20", badge: "text-[#00F0FF] bg-[#00F0FF]/10 border-[#00F0FF]/20", icon: "text-[#00F0FF]", dot: "bg-[#00F0FF]" },
+  purple: { border: "border-purple-500/20", badge: "text-purple-300 bg-purple-500/10 border-purple-500/20", icon: "text-purple-400", dot: "bg-purple-400" },
+  green:  { border: "border-green-500/20",  badge: "text-green-300 bg-green-500/10 border-green-500/20",   icon: "text-green-400", dot: "bg-green-400" },
+  amber:  { border: "border-amber-500/20",  badge: "text-amber-300 bg-amber-500/10 border-amber-500/20",   icon: "text-amber-400", dot: "bg-amber-400" },
+  red:    { border: "border-red-500/20",    badge: "text-red-300 bg-red-500/10 border-red-500/20",         icon: "text-red-400",   dot: "bg-red-400"   },
+};
 
-// ── Fallback synthesised logs when LangSmith is unavailable ─────────────────
-function syntheticLogs(job: Job): PipelineLog[] {
-  const base = new Date(job.created_at).getTime();
-  const t = (s: number) => new Date(base + s * 1000).toISOString();
-  const hasRetry = !!job.error_message;
-  return [
-    { id: "1", timestamp: t(0),  level: "info",    agent: "ProfilerAgent",      message: `Started profiling "${job.filename}" — reading schema, types, missing-value report`, duration: "~0.8s", tags: ["profiler", "pandas"] },
-    { id: "2", timestamp: t(3),  level: "info",    agent: "QualityAgent",       message: "Pandera schema check on raw data — detecting nulls, type coercions, duplicate keys", duration: "~0.5s", tags: ["pandera"] },
-    { id: "3", timestamp: t(5),  level: "info",    agent: "SchemaAgent",        message: "Column types inferred — numeric, categorical, date columns identified", duration: "~0.3s", tags: ["schema"] },
-    { id: "4", timestamp: t(7),  level: "info",    agent: "PlannerAgent (LLM)", message: "Groq LLM generated structured TransformationPlan — cleaning steps ordered by severity", duration: "~2.1s", tags: ["llm", "groq"] },
-    { id: "5", timestamp: t(11), level: "info",    agent: "CodeGen (LLM)",      message: "LLM wrote pandas cleaning function targeting the exact anomalies found in profiling", duration: "~3.4s", tags: ["llm", "codegen"] },
-    { id: "6", timestamp: t(16), level: hasRetry ? "warning" : "info", agent: "ExecutorAgent", message: hasRetry ? "Subprocess execution failed — error passed back to LangGraph circuit breaker" : "Cleaning script executed successfully in sandboxed subprocess", duration: "~1.2s", tags: ["executor", "subprocess"] },
-    ...(hasRetry ? [
-      { id: "6b", timestamp: t(21), level: "info" as const, agent: "CodeGen (LLM)", message: "LLM analysed traceback, identified root cause, rewrote cleaning function", duration: "~3.1s", tags: ["llm", "retry"] },
-      { id: "6c", timestamp: t(26), level: "info" as const, agent: "ExecutorAgent", message: "Retry execution succeeded — output CSV written to outputs/", duration: "~1.1s", tags: ["executor", "success"] },
-    ] : []),
-    { id: "7", timestamp: t(hasRetry ? 29 : 19), level: job.status === "FAILED" ? "error" : "info", agent: "ValidatorAgent", message: job.status === "FAILED" ? "Post-clean Pandera validation failed — high-severity anomalies remain" : "Validation passed — no anomalies above severity threshold", duration: "~0.4s", tags: ["pandera", "validation"] },
-    { id: "8", timestamp: t(hasRetry ? 31 : 21), level: "info", agent: "ReporterAgent", message: "Engineering report with plan, code and quality summary written to outputs/", duration: "~0.2s", tags: ["report"] },
-  ];
+const PHASE_ICONS: Record<number, React.ReactNode> = {
+  0: <ScanSearch className="w-4 h-4" />,
+  1: <Brain className="w-4 h-4" />,
+  2: <Code2 className="w-4 h-4" />,
+  3: <CheckCheck className="w-4 h-4" />,
+};
+
+// ── Phase Card ────────────────────────────────────────────────────────────────
+function PhaseCard({ phase, index }: { phase: InsightsPhase; index: number }) {
+  const c = COLOR_MAP[phase.color] ?? COLOR_MAP.cyan;
+  const isNumbered = (line: string) => /^\d+\./.test(line.trim());
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.07 }}
+      className={`bg-black border ${c.border} rounded-xl p-5 space-y-3`}
+    >
+      <div className="flex items-center justify-between">
+        <div className={`flex items-center gap-2 font-semibold text-sm ${c.icon}`}>
+          {PHASE_ICONS[index] ?? <ScanSearch className="w-4 h-4" />}
+          {phase.phase}
+        </div>
+        {phase.badge && (
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${c.badge}`}>{phase.badge}</span>
+        )}
+      </div>
+      <div className="space-y-1.5 pl-1">
+        {phase.lines.map((line, i) => (
+          <div key={i} className={`flex gap-2 text-xs leading-relaxed ${isNumbered(line) ? "items-start" : "items-start"}`}>
+            {!isNumbered(line) && (
+              <span className={`w-1 h-1 rounded-full ${c.dot} mt-[6px] flex-shrink-0`} />
+            )}
+            <span className="text-gray-400"><RichLine text={line} /></span>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
 }
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -152,31 +136,24 @@ function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: s
   );
 }
 
-// ── Phase Card ────────────────────────────────────────────────────────────────
-function PhaseCard({ phase }: { phase: PhaseSummary }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-3"
-    >
-      <div className="flex items-center justify-between">
-        <div className={`flex items-center gap-2 font-semibold text-sm ${phase.color}`}>
-          {phase.icon}
-          {phase.phase}
-        </div>
-        {phase.badge && (
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-white/10 text-gray-500">{phase.badge}</span>
-        )}
-      </div>
-      <p className="text-xs text-gray-400 leading-relaxed font-sans">{phase.content}</p>
-    </motion.div>
-  );
+// ── Convert LangSmith traces to PipelineLog format ────────────────────────────
+function tracesToLogs(traces: LangSmithTrace[]): PipelineLog[] {
+  return traces.map((t, i) => ({
+    id: t.id || String(i),
+    timestamp: t.timestamp,
+    level: t.level,
+    agent: t.agent,
+    message: t.message,
+    duration: t.duration_ms ? `${(t.duration_ms / 1000).toFixed(2)}s` : undefined,
+    tags: t.tags ?? [],
+  }));
 }
 
 // ── Main ResultsPanel ─────────────────────────────────────────────────────────
 export function ResultsPanel({ job }: { job: Job }) {
   const [activeTab, setActiveTab] = useState<Tab>("data");
   const [csvData, setCsvData] = useState<ParsedCsv | null>(null);
-  const [reportMd, setReportMd] = useState("");
+  const [insights, setInsights] = useState<InsightsData | null>(null);
   const [traces, setTraces] = useState<LangSmithTrace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -188,21 +165,20 @@ export function ResultsPanel({ job }: { job: Job }) {
 
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
     const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "default_secret_key";
+    const headers = { "X-API-Key": API_KEY };
 
     Promise.all([
-      fetchReport(job.id).catch(() => ""),
       fetchCleanedCsvText(job.id).catch(() => ""),
-      fetch(`${API_BASE}/jobs/${job.id}/langsmith-traces`, { headers: { "X-API-Key": API_KEY } })
-        .then(r => r.ok ? r.json() : []).catch(() => []),
-    ]).then(([report, csv, traceData]) => {
-      setReportMd(report);
+      fetch(`${API_BASE}/jobs/${job.id}/insights`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API_BASE}/jobs/${job.id}/langsmith-traces`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([csv, insightsData, traceData]) => {
       if (csv) setCsvData(parseCsvText(csv));
+      setInsights(insightsData);
       setTraces(traceData || []);
     }).catch(e => setError(e.message)).finally(() => setLoading(false));
   }, [job.id, job.status]);
 
-  const phaseSummaries = parseReportIntoPhases(reportMd, csvData);
-  const logs: PipelineLog[] = traces.length > 0 ? tracesToLogs(traces) : syntheticLogs(job);
+  const logs: PipelineLog[] = traces.length > 0 ? tracesToLogs(traces) : [];
 
   const handleDownload = async () => {
     setIsDownloading(true);
@@ -212,10 +188,20 @@ export function ResultsPanel({ job }: { job: Job }) {
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "data", label: "Cleaned Data", icon: <Table2 className="w-3.5 h-3.5" /> },
-    { id: "insights", label: "LLM Insights", icon: <Brain className="w-3.5 h-3.5" /> },
-    { id: "logs", label: traces.length > 0 ? `LangSmith Traces (${traces.length})` : "Pipeline Logs", icon: <ScrollText className="w-3.5 h-3.5" /> },
+    { id: "data",     label: "Cleaned Data",   icon: <Table2 className="w-3.5 h-3.5" /> },
+    { id: "insights", label: "Insights",        icon: <BarChart3 className="w-3.5 h-3.5" /> },
+    { id: "logs",     label: traces.length > 0 ? `LangSmith Traces (${traces.length})` : "Pipeline Logs", icon: <ScrollText className="w-3.5 h-3.5" /> },
   ];
+
+  // Stats derived from insights
+  const phase1 = insights?.phases?.[0];
+  const rowsLine = phase1?.lines?.find(l => l.includes("rows"));
+  const rowCount = rowsLine ? rowsLine.match(/[\d,]+(?= rows)/)?.[0] ?? "—" : "—";
+  const colCount = csvData ? String(csvData.headers.length) : "—";
+  const retryPhase = insights?.phases?.find(p => p.phase.includes("Code"));
+  const retries = retryPhase?.badge === "1 retry" ? "1" : "0";
+  const valPhase = insights?.phases?.find(p => p.phase.includes("Validation"));
+  const validated = valPhase?.status === "completed" ? "✓ Pass" : "✗ Fail";
 
   return (
     <motion.div
@@ -245,14 +231,12 @@ export function ResultsPanel({ job }: { job: Job }) {
       </div>
 
       {/* Stat cards */}
-      {csvData && (
-        <div className="flex gap-3 mb-5 flex-wrap">
-          <StatCard icon={<Rows3 className="w-4 h-4" />} label="Rows Cleaned" value={csvData.totalRows.toLocaleString()} sub="in output CSV" />
-          <StatCard icon={<Columns3 className="w-4 h-4" />} label="Columns" value={String(csvData.headers.length)} sub="feature columns" />
-          <StatCard icon={<Wrench className="w-4 h-4" />} label="LLM Passes" value={phaseSummaries.some(p => p.badge?.includes("retry")) ? "2" : "1"} sub="code generation" />
-          <StatCard icon={<ShieldCheck className="w-4 h-4" />} label="Pandera Check" value={job.status === "COMPLETED" ? "✓ Pass" : "✗ Fail"} sub="post-clean validation" />
-        </div>
-      )}
+      <div className="flex gap-3 mb-5 flex-wrap">
+        <StatCard icon={<Rows3 className="w-4 h-4" />}    label="Rows in Output"    value={rowCount}    sub="from insights data" />
+        <StatCard icon={<Columns3 className="w-4 h-4" />}  label="Columns"           value={colCount}    sub="feature columns" />
+        <StatCard icon={<Wrench className="w-4 h-4" />}    label="LLM Retries"       value={retries}     sub="code generation" />
+        <StatCard icon={<ShieldCheck className="w-4 h-4" />} label="Pandera Check"   value={validated}   sub="post-clean validation" />
+      </div>
 
       {/* Main panel */}
       <div className="bg-[#020202] border border-white/[0.07] rounded-2xl overflow-hidden">
@@ -290,7 +274,9 @@ export function ResultsPanel({ job }: { job: Job }) {
                 {activeTab === "data" && (csvData ? (
                   <>
                     {csvData.totalRows > 200 && (
-                      <p className="text-xs font-mono text-amber-400/70 mb-3">Showing first 200 of {csvData.totalRows.toLocaleString()} rows. Download for full dataset.</p>
+                      <p className="text-xs font-mono text-amber-400/70 mb-3">
+                        Showing first 200 of {csvData.totalRows.toLocaleString()} rows — download for full dataset.
+                      </p>
                     )}
                     <ExcelTable data={csvData.rows} headers={csvData.headers} />
                   </>
@@ -300,28 +286,50 @@ export function ResultsPanel({ job }: { job: Job }) {
 
                 {activeTab === "insights" && (
                   <div className="space-y-3">
-                    <p className="text-xs font-mono text-gray-600 mb-4">
-                      {traces.length > 0 ? `Generated from ${traces.length} LangSmith trace events.` : "Derived from pipeline report and cleaned dataset."}
-                    </p>
-                    {phaseSummaries.length > 0 ? (
-                      phaseSummaries.map((p, i) => <PhaseCard key={i} phase={p} />)
+                    {insights ? (
+                      <>
+                        <p className="text-xs font-mono text-gray-600 mb-4 px-1">
+                          Real data from pipeline execution — every number is what the agents actually computed.
+                        </p>
+                        {insights.phases.map((phase, i) => (
+                          <PhaseCard key={i} phase={phase} index={i} />
+                        ))}
+                      </>
                     ) : (
-                      <p className="text-xs font-mono text-gray-600 text-center py-12">No report data available yet.</p>
+                      <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <AlertCircle className="w-8 h-8 text-amber-400/60" />
+                        <p className="text-sm font-mono text-gray-500">
+                          No insights available — this job was run before phase data persistence was added.
+                        </p>
+                        <p className="text-xs font-mono text-gray-600">Re-run the pipeline with a new upload to see real insights.</p>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {activeTab === "logs" && (
                   <div>
-                    {traces.length > 0 && (
-                      <div className="flex items-center gap-2 mb-3 px-1">
-                        <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
-                        <p className="text-xs font-mono text-[#00F0FF]/70">Live data from LangSmith — {traces.length} trace events</p>
+                    {traces.length > 0 ? (
+                      <>
+                        <div className="flex items-center gap-2 mb-3 px-1">
+                          <div className="w-2 h-2 rounded-full bg-[#00F0FF]" />
+                          <p className="text-xs font-mono text-[#00F0FF]/70">
+                            Live data from LangSmith — {traces.length} trace events
+                          </p>
+                        </div>
+                        <div className="h-[400px]">
+                          <InteractiveLogsTable logs={logs} />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <ScrollText className="w-8 h-8 text-gray-700" />
+                        <p className="text-sm font-mono text-gray-500">No LangSmith traces found.</p>
+                        <p className="text-xs font-mono text-gray-600">
+                          Make sure LANGSMITH_API_KEY is set in the backend .env and tracing is enabled.
+                        </p>
                       </div>
                     )}
-                    <div className="h-[400px]">
-                      <InteractiveLogsTable logs={logs} />
-                    </div>
                   </div>
                 )}
 

@@ -440,11 +440,14 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
     }
   };
 
-  const processFile = (file: File) => {
-    setFiles([file]);
-    if (onFilesAccepted) {
-      onFilesAccepted([file]);
-    }
+  const processFiles = (newFiles: File[]) => {
+    setFiles((prev) => {
+      const updated = [...prev, ...newFiles];
+      if (onFilesAccepted) {
+        onFilesAccepted(updated);
+      }
+      return updated;
+    });
   };
 
   const handleDragOver = React.useCallback((e: React.DragEvent) => {
@@ -461,11 +464,11 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
     e.preventDefault();
     e.stopPropagation();
     const droppedFiles = Array.from(e.dataTransfer.files);
-    if (droppedFiles.length > 0) processFile(droppedFiles[0]);
-  }, [processFile]);
+    if (droppedFiles.length > 0) processFiles(droppedFiles);
+  }, []);
 
   const handleRemoveFile = (index: number) => {
-    setFiles([]);
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = () => {
@@ -564,11 +567,12 @@ export const PromptInputBox = React.forwardRef((props: PromptInputBoxProps, ref:
                   ref={uploadInputRef}
                   type="file"
                   className="hidden"
+                  multiple
                   onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) processFile(e.target.files[0]);
+                    if (e.target.files && e.target.files.length > 0) processFiles(Array.from(e.target.files));
                     if (e.target) e.target.value = "";
                   }}
-                  accept=".csv,.xlsx,.xls,.json"
+                  accept=".csv,.xlsx,.xls,.json,.tsv,.parquet,.txt,.xml"
                 />
               </button>
             </PromptInputAction>

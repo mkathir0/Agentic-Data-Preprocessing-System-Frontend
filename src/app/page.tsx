@@ -32,13 +32,13 @@ export default function Home() {
 
   const handleSend = async (_message: string, files?: File[]) => {
     if (!files || files.length === 0) {
-      alert("Please upload a CSV dataset to process.");
+      alert("Please upload at least one dataset to process.");
       return;
     }
     try {
       setHasStarted(true);
       setIsUploading(true);
-      const job = await uploadDataset(files[0]);
+      const job = await uploadDataset(files);
       setActiveJob(job);
       setIsUploading(false);
       setIsPolling(true);

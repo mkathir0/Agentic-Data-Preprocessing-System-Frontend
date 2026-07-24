@@ -15,9 +15,11 @@ export interface Job {
   cleaning_plan: any | null;
 }
 
-export async function uploadDataset(file: File): Promise<Job> {
+export async function uploadDataset(files: File[]): Promise<Job> {
   const formData = new FormData();
-  formData.append("file", file);
+  files.forEach((file) => {
+    formData.append("files", file); // Appending multiple files under 'files' key
+  });
   const response = await fetch(`${API_BASE_URL}/jobs/upload`, { method: "POST", headers: authHeaders, body: formData });
   if (!response.ok) { const err = await response.text(); throw new Error(`Upload failed: ${err}`); }
   return response.json();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Database, FileCode2 } from "lucide-react";
 import EnterpriseAIPipeline from "@/components/ui/ai-agent-pipeline";
@@ -12,23 +12,35 @@ import { ResultsPanel } from "@/components/dashboard/ResultsPanel";
 
 export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
-  const [activeJob, setActiveJob] = useState<Job | null>(null);
+  const [activeJobs, setActiveJobs] = useState<Job[]>([]);
+  const [selectedJobIndex, setSelectedJobIndex] = useState<number>(0);
   const [isPolling, setIsPolling] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Use a ref so the interval callback always reads the LATEST jobs without stale closure
+  const activeJobsRef = useRef<Job[]>([]);
+  activeJobsRef.current = activeJobs;
+
   useEffect(() => {
-    if (!activeJob || !isPolling) return;
+    if (!isPolling) return;
     const pollInterval = setInterval(async () => {
+      const current = activeJobsRef.current;
+      if (current.length === 0) return;
       try {
-        const job = await getJobStatus(activeJob.id);
-        setActiveJob(job);
-        if (job.status === "COMPLETED" || job.status === "FAILED") {
+        const updatedJobs = await Promise.all(
+          current.map(async (job) => {
+            if (job.status === "COMPLETED" || job.status === "FAILED") return job;
+            return await getJobStatus(job.id);
+          })
+        );
+        setActiveJobs(updatedJobs);
+        if (updatedJobs.every((j) => j.status === "COMPLETED" || j.status === "FAILED")) {
           setIsPolling(false);
         }
       } catch (e) { console.error("Polling error:", e); }
     }, 3000);
     return () => clearInterval(pollInterval);
-  }, [activeJob, isPolling]);
+  }, [isPolling]); // Only re-run when isPolling changes, NOT on every job update
 
   const handleSend = async (_message: string, files?: File[]) => {
     if (!files || files.length === 0) {
@@ -38,8 +50,9 @@ export default function Home() {
     try {
       setHasStarted(true);
       setIsUploading(true);
-      const job = await uploadDataset(files);
-      setActiveJob(job);
+      const jobs = await uploadDataset(files);
+      setActiveJobs(jobs);
+      setSelectedJobIndex(0);
       setIsUploading(false);
       setIsPolling(true);
     } catch (error) {
@@ -50,6 +63,7 @@ export default function Home() {
     }
   };
 
+  const activeJob = activeJobs[selectedJobIndex];
   const isCompleted = activeJob?.status === "COMPLETED";
   const isFailed = activeJob?.status === "FAILED";
 
@@ -125,8 +139,32 @@ export default function Home() {
               initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
               animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="w-full flex flex-col items-center pt-12 pb-24 max-w-5xl mx-auto"
+              className="w-full flex flex-col items-center pt-8 pb-24 max-w-5xl mx-auto"
             >
+              {/* File Selector */}
+              {activeJobs.length > 1 && (
+                <div className="flex flex-wrap gap-2 mb-8 justify-center w-full max-w-3xl">
+                  {activeJobs.map((job, idx) => (
+                    <button
+                      key={job.id}
+                      onClick={() => setSelectedJobIndex(idx)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                        selectedJobIndex === idx
+                          ? "bg-[#00F0FF] text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]"
+                          : "bg-[#1A1A1A] text-gray-400 border border-white/10 hover:bg-[#2A2A2A]"
+                      }`}
+                    >
+                      {job.filename}
+                      {job.status === "COMPLETED" && <span className="ml-2 text-green-500">✓</span>}
+                      {job.status === "FAILED" && <span className="ml-2 text-red-500">✗</span>}
+                      {(job.status === "PROCESSING" || job.status === "PENDING") && (
+                        <span className="ml-2 inline-block w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Pipeline widget — passes live state */}
               <EnterpriseAIPipeline
                 status={activeJob?.status as any ?? "PENDING"}

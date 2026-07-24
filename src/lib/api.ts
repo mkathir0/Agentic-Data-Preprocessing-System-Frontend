@@ -15,7 +15,7 @@ export interface Job {
   cleaning_plan: any | null;
 }
 
-export async function uploadDataset(files: File[]): Promise<Job> {
+export async function uploadDataset(files: File[]): Promise<Job[]> {
   const formData = new FormData();
   files.forEach((file) => {
     formData.append("files", file); // Appending multiple files under 'files' key

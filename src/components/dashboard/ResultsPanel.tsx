@@ -15,19 +15,7 @@ type Tab = "data" | "insights" | "logs";
 
 interface ParsedCsv { headers: string[]; rows: string[][]; totalRows: number; }
 
-interface InsightsPhase {
-  phase: string;
-  color: "cyan" | "purple" | "green" | "amber" | "red";
-  status: "completed" | "failed";
-  lines: string[];
-  badge?: string;
-}
-
-interface InsightsData {
-  job_id: string;
-  filename: string;
-  phases: InsightsPhase[];
-}
+import { InsightsReport, InsightsData } from "./InsightsReport";
 
 interface LangSmithTrace {
   id: string; agent: string; level: "info" | "warning" | "error";
@@ -73,54 +61,7 @@ function RichLine({ text }: { text: string }) {
   );
 }
 
-const COLOR_MAP = {
-  cyan:   { border: "border-[#00F0FF]/20", badge: "text-[#00F0FF] bg-[#00F0FF]/10 border-[#00F0FF]/20", icon: "text-[#00F0FF]", dot: "bg-[#00F0FF]" },
-  purple: { border: "border-purple-500/20", badge: "text-purple-300 bg-purple-500/10 border-purple-500/20", icon: "text-purple-400", dot: "bg-purple-400" },
-  green:  { border: "border-green-500/20",  badge: "text-green-300 bg-green-500/10 border-green-500/20",   icon: "text-green-400", dot: "bg-green-400" },
-  amber:  { border: "border-amber-500/20",  badge: "text-amber-300 bg-amber-500/10 border-amber-500/20",   icon: "text-amber-400", dot: "bg-amber-400" },
-  red:    { border: "border-red-500/20",    badge: "text-red-300 bg-red-500/10 border-red-500/20",         icon: "text-red-400",   dot: "bg-red-400"   },
-};
 
-const PHASE_ICONS: Record<number, React.ReactNode> = {
-  0: <ScanSearch className="w-4 h-4" />,
-  1: <Brain className="w-4 h-4" />,
-  2: <Code2 className="w-4 h-4" />,
-  3: <CheckCheck className="w-4 h-4" />,
-};
-
-// ── Phase Card ────────────────────────────────────────────────────────────────
-function PhaseCard({ phase, index }: { phase: InsightsPhase; index: number }) {
-  const c = COLOR_MAP[phase.color] ?? COLOR_MAP.cyan;
-  const isNumbered = (line: string) => /^\d+\./.test(line.trim());
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.07 }}
-      className={`bg-black border ${c.border} rounded-xl p-5 space-y-3`}
-    >
-      <div className="flex items-center justify-between">
-        <div className={`flex items-center gap-2 font-semibold text-sm ${c.icon}`}>
-          {PHASE_ICONS[index] ?? <ScanSearch className="w-4 h-4" />}
-          {phase.phase}
-        </div>
-        {phase.badge && (
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${c.badge}`}>{phase.badge}</span>
-        )}
-      </div>
-      <div className="space-y-1.5 pl-1">
-        {phase.lines.map((line, i) => (
-          <div key={i} className={`flex gap-2 text-xs leading-relaxed ${isNumbered(line) ? "items-start" : "items-start"}`}>
-            {!isNumbered(line) && (
-              <span className={`w-1 h-1 rounded-full ${c.dot} mt-[6px] flex-shrink-0`} />
-            )}
-            <span className="text-gray-400"><RichLine text={line} /></span>
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
@@ -194,14 +135,10 @@ export function ResultsPanel({ job }: { job: Job }) {
   ];
 
   // Stats derived from insights
-  const phase1 = insights?.phases?.[0];
-  const rowsLine = phase1?.lines?.find(l => l.includes("rows"));
-  const rowCount = rowsLine ? rowsLine.match(/[\d,]+(?= rows)/)?.[0] ?? "—" : "—";
+  const rowCount = insights?.profiler_data?.num_rows ?? "—";
   const colCount = csvData ? String(csvData.headers.length) : "—";
-  const retryPhase = insights?.phases?.find(p => p.phase.includes("Code"));
-  const retries = retryPhase?.badge === "1 retry" ? "1" : "0";
-  const valPhase = insights?.phases?.find(p => p.phase.includes("Validation"));
-  const validated = valPhase?.status === "completed" ? "✓ Pass" : "✗ Fail";
+  const retries = insights?.retry_count?.toString() ?? "0";
+  const validated = insights?.validation_report?.overall_passed ? "✓ Pass" : (insights?.validation_report ? "✗ Fail" : "—");
 
   return (
     <motion.div
@@ -291,9 +228,16 @@ export function ResultsPanel({ job }: { job: Job }) {
                         <p className="text-xs font-mono text-gray-600 mb-4 px-1">
                           Real data from pipeline execution — every number is what the agents actually computed.
                         </p>
-                        {insights.phases.map((phase, i) => (
-                          <PhaseCard key={i} phase={phase} index={i} />
-                        ))}
+                        {insights.validation_report ? (
+                          <InsightsReport data={insights} />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-16 gap-3">
+                            <AlertCircle className="w-8 h-8 text-amber-400/60" />
+                            <p className="text-sm font-mono text-gray-500">
+                              Legacy report detected — no rich validation data available.
+                            </p>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-16 gap-3">

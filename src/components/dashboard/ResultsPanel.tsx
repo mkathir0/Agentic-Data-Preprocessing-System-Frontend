@@ -172,7 +172,7 @@ export function ResultsPanel({ job }: { job: Job }) {
         <StatCard icon={<Rows3 className="w-4 h-4" />}    label="Rows in Output"    value={rowCount}    sub="from insights data" />
         <StatCard icon={<Columns3 className="w-4 h-4" />}  label="Columns"           value={colCount}    sub="feature columns" />
         <StatCard icon={<Wrench className="w-4 h-4" />}    label="LLM Retries"       value={retries}     sub="code generation" />
-        <StatCard icon={<ShieldCheck className="w-4 h-4" />} label="Pandera Check"   value={validated}   sub="post-clean validation" />
+        <StatCard icon={<ShieldCheck className="w-4 h-4" />} label="Validation Engine" value={validated}   sub="7-layer validation" />
       </div>
 
       {/* Main panel */}

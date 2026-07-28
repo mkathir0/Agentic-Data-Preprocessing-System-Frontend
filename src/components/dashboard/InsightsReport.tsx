@@ -130,7 +130,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           </span>
         </div>
         
-        {vr.escalation_flags && vr.escalation_flags.length > 0 ? (
+        {vr.escalation_flags && vr.escalation_flags.length > 0 && (
           <div className="space-y-2">
             <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider mb-1">Action Required</h4>
             {vr.escalation_flags.map((flag: any, i: number) => (
@@ -143,11 +143,47 @@ export function InsightsReport({ data }: { data: InsightsData }) {
               </div>
             ))}
           </div>
-        ) : (
-          <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-green-400 text-sm font-mono">
-            <ShieldCheck className="w-4 h-4" /> All checks passed successfully. No escalations.
-          </div>
         )}
+
+        {(() => {
+          const allChecks = [
+            ...(vr.schema_checks || []),
+            ...(vr.range_checks || []),
+            ...(vr.cross_field_checks || []),
+            ...(vr.distributional_checks || []),
+            ...(vr.duplicate_checks || []),
+            ...(vr.format_checks || []),
+            ...(vr.regression_checks || [])
+          ];
+          const failedChecks = allChecks.filter((c: any) => !c.passed);
+          
+          if (failedChecks.length > 0) {
+            return (
+              <div className="space-y-2 mt-4">
+                <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider mb-1">Failed Validation Checks</h4>
+                {failedChecks.map((check: any, i: number) => (
+                  <div key={i} className="flex gap-3 text-xs p-3 rounded-lg border bg-red-500/5 border-red-500/20 text-red-200">
+                    <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
+                    <div>
+                      <div className="font-semibold">{check.category.toUpperCase()}: {check.name}</div>
+                      <div className="opacity-80 mt-0.5">{check.details}</div>
+                      {check.violations > 0 && (
+                        <div className="text-red-400/80 mt-1 font-mono text-[10px]">{check.violations} violations</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          } else if (!vr.escalation_flags || vr.escalation_flags.length === 0) {
+            return (
+              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-green-400 text-sm font-mono mt-4">
+                <ShieldCheck className="w-4 h-4" /> All checks passed successfully. No escalations.
+              </div>
+            );
+          }
+          return null;
+        })()}
       </section>
     </div>
   );

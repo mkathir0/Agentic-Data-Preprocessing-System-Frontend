@@ -30,7 +30,11 @@ export function InsightsReport({ data }: { data: InsightsData }) {
   return (
     <div className="space-y-6">
       {/* 1. Profiling & Assumptions */}
-      <section className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4">
+      <motion.section 
+        whileHover={{ scale: 1.01, y: -2 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4"
+      >
         <div className="flex items-center gap-2 text-[#00F0FF]">
           <FileSearch className="w-4 h-4" />
           <h3 className="text-sm font-semibold">1. Data Profiling & Assumptions</h3>
@@ -48,10 +52,14 @@ export function InsightsReport({ data }: { data: InsightsData }) {
             </ul>
           </div>
         )}
-      </section>
+      </motion.section>
 
       {/* 2. Pipeline Plan */}
-      <section className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4">
+      <motion.section 
+        whileHover={{ scale: 1.01, y: -2 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-purple-400">
             <Code2 className="w-4 h-4" />
@@ -84,7 +92,11 @@ export function InsightsReport({ data }: { data: InsightsData }) {
 
       {/* 3. Stats Diff Table */}
       {vr.stats_diff && vr.stats_diff.length > 0 && (
-        <section className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4 overflow-x-auto">
+        <motion.section 
+          whileHover={{ scale: 1.01, y: -2 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+          className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4 overflow-x-auto"
+        >
           <div className="flex items-center gap-2 text-blue-400">
             <TrendingDown className="w-4 h-4" />
             <h3 className="text-sm font-semibold">3. Statistical Distribution Changes</h3>
@@ -115,11 +127,15 @@ export function InsightsReport({ data }: { data: InsightsData }) {
               ))}
             </tbody>
           </table>
-        </section>
+        </motion.section>
       )}
 
       {/* 4. Validation & Escalations */}
-      <section className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4">
+      <motion.section 
+        whileHover={{ scale: 1.01, y: -2 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        className="bg-black border border-white/[0.07] rounded-xl p-5 space-y-4"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-green-400">
             <ShieldCheck className="w-4 h-4" />
@@ -184,7 +200,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           }
           return null;
         })()}
-      </section>
+      </motion.section>
     </div>
   );
 }

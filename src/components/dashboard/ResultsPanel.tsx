@@ -67,6 +67,8 @@ function RichLine({ text }: { text: string }) {
 function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      whileHover={{ scale: 1.05, y: -2 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
       className="flex-1 min-w-[110px] bg-black border border-white/[0.08] rounded-xl p-4 flex flex-col gap-1.5"
     >
       <div className="text-gray-600">{icon}</div>
@@ -159,8 +161,9 @@ export function ResultsPanel({ job }: { job: Job }) {
           </div>
         </div>
         <motion.button onClick={handleDownload} disabled={isDownloading}
-          whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] disabled:opacity-60 text-white text-sm font-semibold rounded-full shadow-[0_0_20px_rgba(34,197,94,0.2)] transition-all"
+          whileHover={{ scale: 1.05, y: -2 }} whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#00F0FF] hover:bg-[#00D0DD] disabled:opacity-60 text-black text-sm font-semibold rounded-full shadow-[0_0_20px_rgba(0,240,255,0.4)] animate-pulse-glow"
         >
           {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           {isDownloading ? "Downloading..." : "Download Cleaned CSV"}

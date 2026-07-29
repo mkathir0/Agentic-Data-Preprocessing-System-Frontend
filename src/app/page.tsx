@@ -124,7 +124,7 @@ export default function Home() {
               </div>
 
               <div className="mt-12 flex items-center gap-6 text-xs font-mono text-gray-600 uppercase tracking-widest">
-                <div className="flex items-center gap-2"><Database className="w-3.5 h-3.5" /> Pandera</div>
+                <div className="flex items-center gap-2"><Database className="w-3.5 h-3.5" /> Validation Engine</div>
                 <span className="w-1 h-1 rounded-full bg-gray-800" />
                 <div className="flex items-center gap-2"><FileCode2 className="w-3.5 h-3.5" /> Pandas</div>
                 <span className="w-1 h-1 rounded-full bg-gray-800" />
@@ -145,10 +145,12 @@ export default function Home() {
               {activeJobs.length > 1 && (
                 <div className="flex flex-wrap gap-2 mb-8 justify-center w-full max-w-3xl">
                   {activeJobs.map((job, idx) => (
-                    <button
+                    <motion.button
                       key={job.id}
                       onClick={() => setSelectedJobIndex(idx)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                         selectedJobIndex === idx
                           ? "bg-[#00F0FF] text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]"
                           : "bg-[#1A1A1A] text-gray-400 border border-white/10 hover:bg-[#2A2A2A]"
@@ -160,7 +162,7 @@ export default function Home() {
                       {(job.status === "PROCESSING" || job.status === "PENDING") && (
                         <span className="ml-2 inline-block w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
                       )}
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
               )}

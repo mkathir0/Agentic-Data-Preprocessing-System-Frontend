@@ -88,7 +88,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
             </div>
           ))}
         </div>
-      </section>
+      </motion.section>
 
       {/* 3. Stats Diff Table */}
       {vr.stats_diff && vr.stats_diff.length > 0 && (

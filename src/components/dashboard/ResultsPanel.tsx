@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   Job,
+  ValidationReport,
   fetchCleanedCsvText,
   fetchRawCsvText,
   fetchReport,
@@ -408,13 +409,13 @@ export function ResultsPanel({
               {vr?.key_conflict_count && vr.key_conflict_count > 0 ? (
                 <>
                   {" "}However, the validation engine detected{" "}
-                  <strong className="text-amber-100">{vr.key_conflict_count} primary key collisions</strong> (identical IDs with conflicting records).
+                  <strong className="text-amber-950">{vr.key_conflict_count} primary key collisions</strong> (identical IDs with conflicting records).
                   Rather than blindly overwriting or discarding transactions, the self-healing circuit breaker safely preserved these rows for human domain review.
                 </>
               ) : vr?.escalation_flags && vr.escalation_flags.length > 0 ? (
                 <>
                   {" "}The validation engine flagged{" "}
-                  <strong className="text-amber-100">{vr.escalation_flags.length} domain / cross-field anomalies</strong> for verification.
+                  <strong className="text-amber-950">{vr.escalation_flags.length} domain / cross-field anomalies</strong> for verification.
                   Inspect the audit before using the candidate output. It is not approved for production.
                 </>
               ) : (
@@ -495,7 +496,7 @@ export function ResultsPanel({
           }
         />
         <StatCard
-          icon={<RefreshCw className="w-4 h-4 text-amber-400" />}
+          icon={<RefreshCw className="w-4 h-4 text-amber-700" />}
           label="Repair retries"
           value={`${job.retry_count ?? insights?.retry_count ?? 0} / 3`}
           sub={
@@ -559,7 +560,7 @@ export function ResultsPanel({
               <span className="text-sm font-mono text-gray-600">Loading dataset and insights...</span>
             </div>
           ) : error ? (
-            <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-mono">
+            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
               {error}
             </div>
@@ -728,10 +729,10 @@ export function ResultsPanel({
                                 <span
                                   className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-mono ${
                                     act.confidence === "high"
-                                      ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                                      ? "bg-green-50 text-green-800 border border-green-200"
                                       : act.confidence === "medium"
-                                      ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                      : "bg-red-500/10 text-red-400 border border-red-500/20"
+                                      ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                      : "bg-red-50 text-red-800 border border-red-200"
                                   }`}
                                 >
                                   {act.confidence}
@@ -918,7 +919,13 @@ export function ResultsPanel({
                     </div>
 
                     {reportMarkdown ? (
-                      <MarkdownReport source={reportMarkdown} />
+                      <MarkdownReport
+                        source={reportMarkdown}
+                        jobId={job.id}
+                        validationReport={vr}
+                        needsHumanReview={Boolean(vr?.review_required || isReviewFlagged || (vr?.escalation_flags?.length ?? 0) > 0 || (vr && !vr.overall_passed))}
+                        productionApproved={passedVerification && !vr?.review_required && !isReviewFlagged && !(vr?.escalation_flags?.length)}
+                      />
                     ) : (
                       <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[#dce3dc] bg-[#fbfcfa] px-6 text-center">
                         <span className="grid size-11 place-items-center rounded-full bg-[#edf3ee] text-[#66806d]"><FileText className="size-5" /></span>
@@ -935,7 +942,7 @@ export function ResultsPanel({
                 {activeTab === "logs" && (
                   <div>
                     <div className="flex items-center justify-between gap-3 mb-3">
-                      <p role={traceError ? "alert" : undefined} className="text-xs font-mono text-amber-400">
+                      <p role={traceError ? "alert" : undefined} className="text-xs text-amber-800">
                         {traceError || (traces.some((trace) => trace.status === "pending")
                           ? "Some trace completion updates have not yet arrived. Refreshing automatically."
                           : "")}
@@ -1023,7 +1030,13 @@ function getReportSections(source: string): ReportSection[] {
   return sections.length > 0 ? sections : [{ title: "Overview", source }];
 }
 
-function MarkdownReport({ source }: { source: string }) {
+function MarkdownReport({ source, jobId, validationReport, needsHumanReview, productionApproved }: {
+  source: string;
+  jobId: string;
+  validationReport: ValidationReport | null | undefined;
+  needsHumanReview: boolean;
+  productionApproved: boolean;
+}) {
   const sections = getReportSections(source);
   const [activeSection, setActiveSection] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -1038,7 +1051,57 @@ function MarkdownReport({ source }: { source: string }) {
   };
 
   return (
-    <section aria-label="Report sections" className="overflow-hidden rounded-2xl border border-[#e2e8e2] bg-[#f8faf7]">
+    <div className="space-y-4">
+      <section aria-labelledby="report-overview-title" className="overflow-hidden rounded-2xl border border-[#e2e8e2] bg-white shadow-sm">
+        <div className={`border-b px-5 py-4 ${productionApproved ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className={`text-[10px] font-bold uppercase tracking-[0.13em] ${productionApproved ? "text-emerald-800" : "text-amber-800"}`}>
+                {productionApproved ? "Validation outcome" : "Action required"}
+              </p>
+              <h3 id="report-overview-title" className={`mt-1 text-lg font-semibold tracking-[-0.025em] ${productionApproved ? "text-emerald-950" : "text-amber-950"}`}>
+                {productionApproved ? "Approved for production" : needsHumanReview ? "Human review required" : "Production approval unavailable"}
+              </h3>
+              <p className={`mt-1 max-w-2xl text-sm leading-5 ${productionApproved ? "text-emerald-900" : "text-amber-900"}`}>
+                {productionApproved
+                  ? "Integrity and validation checks passed. The cleaned output is ready for use."
+                  : needsHumanReview
+                    ? validationReport?.integrity_passed
+                      ? "File integrity passed, but validation or review requirements are unresolved. Do not use this output in production yet."
+                      : "Validation did not clear this output. Review the flagged evidence before using it."
+                    : "Validation evidence is incomplete, so production use has not been approved."}
+              </p>
+            </div>
+            <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${productionApproved ? "bg-white text-emerald-900 ring-1 ring-emerald-300" : "bg-white text-amber-950 ring-1 ring-amber-300"}`}>
+              {productionApproved ? "APPROVED" : "NOT APPROVED"}
+            </span>
+          </div>
+        </div>
+        <div className="grid divide-y divide-[#edf0ec] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <div className="p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Validation checks</p>
+            <p className="mt-1 text-lg font-semibold text-[#34453a]">{validationReport ? `${validationReport.total_passed}/${validationReport.total_checks}` : "—"}</p>
+            <p className="text-xs text-[#758177]">passed</p>
+          </div>
+          <div className="p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Quality score</p>
+            <p className="mt-1 text-lg font-semibold text-[#34453a]">{validationReport?.data_quality_score_after !== undefined ? `${validationReport.data_quality_score_after.toFixed(1)}/100` : "—"}</p>
+            <p className="text-xs text-[#758177]">{validationReport?.score_improvement !== undefined ? `${validationReport.score_improvement >= 0 ? "+" : ""}${validationReport.score_improvement.toFixed(1)} pts change` : "change not reported"}</p>
+          </div>
+          <div className="p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Integrity</p>
+            <p className={`mt-1 text-lg font-semibold ${validationReport?.integrity_passed === true ? "text-emerald-800" : validationReport?.integrity_passed === false ? "text-red-800" : "text-amber-800"}`}>{validationReport?.integrity_passed === true ? "Passed" : validationReport?.integrity_passed === false ? "Failed" : "Not confirmed"}</p>
+            <p className="text-xs text-[#758177]">file and output checks</p>
+          </div>
+          <div className="p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Job ID</p>
+            <p className="mt-1 break-all font-mono text-xs font-medium text-[#34453a]">{jobId}</p>
+            <p className="text-xs text-[#758177]">run reference</p>
+          </div>
+        </div>
+      </section>
+
+      <section aria-label="Report sections" className="overflow-hidden rounded-2xl border border-[#e2e8e2] bg-[#f8faf7]">
       <div className="flex flex-col gap-3 border-b border-[#e6ebe5] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#829087]">Section {String(activeSection + 1).padStart(2, "0")} of {String(sections.length).padStart(2, "0")}</p>
@@ -1083,7 +1146,8 @@ function MarkdownReport({ source }: { source: string }) {
         <span>Swipe or scroll sideways to move through the report</span>
         <span className="font-medium text-[#526357]">{activeSection + 1} / {sections.length}</span>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }
 

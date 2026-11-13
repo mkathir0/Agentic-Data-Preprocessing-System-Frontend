@@ -151,7 +151,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                 <span className="text-xs text-gray-600">/ 100</span>
               </div>
             </div>
-            <div className="bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg text-emerald-400 font-mono text-xs font-bold flex items-center gap-1">
+            <div className="bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-emerald-800 font-mono text-xs font-bold flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5" />
               {dqImprovement !== undefined ? `${dqImprovement > 0 ? "+" : ""}${dqImprovement.toFixed(1)} pts` : "Not reported"}
             </div>
@@ -176,10 +176,10 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           <div className="bg-[#f5f7f4] border border-[#e8ece7] rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-gray-700 font-medium">2. Validity</span>
-              <span className="font-mono font-bold text-emerald-400">{valScore !== undefined ? `${valScore.toFixed(1)}%` : "—"}</span>
+              <span className="font-mono font-bold text-emerald-800">{valScore !== undefined ? `${valScore.toFixed(1)}%` : "—"}</span>
             </div>
             <div className="w-full bg-[#f4f7f3] h-1.5 rounded-full overflow-hidden mb-2">
-              <div className="bg-emerald-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, valScore ?? 0)}%` }} />
+              <div className="bg-emerald-600 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, valScore ?? 0)}%` }} />
             </div>
             <span className="text-[10px] text-gray-500 leading-tight">Pandera contracts & boundary enforcement</span>
           </div>
@@ -200,10 +200,10 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           <div className="bg-[#f5f7f4] border border-[#e8ece7] rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-gray-700 font-medium">4. Consistency</span>
-              <span className="font-mono font-bold text-amber-400">{consScore !== undefined ? `${consScore.toFixed(1)}%` : "—"}</span>
+              <span className="font-mono font-bold text-amber-800">{consScore !== undefined ? `${consScore.toFixed(1)}%` : "—"}</span>
             </div>
             <div className="w-full bg-[#f4f7f3] h-1.5 rounded-full overflow-hidden mb-2">
-              <div className="bg-amber-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, consScore ?? 0)}%` }} />
+              <div className="bg-amber-600 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, consScore ?? 0)}%` }} />
             </div>
             <span className="text-[10px] text-gray-500 leading-tight">Temporal order & arithmetic invariant checks</span>
           </div>
@@ -217,17 +217,17 @@ export function InsightsReport({ data }: { data: InsightsData }) {
         className="bg-white border border-[#e5eae4] rounded-xl p-5 space-y-4"
       >
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 text-emerald-400">
+          <div className="flex items-center gap-2 text-emerald-800">
             <ShieldCheck className="w-4 h-4" />
             <h3 className="text-sm font-semibold">Pandera Lazy Schema Contract Verification</h3>
           </div>
           <div className="flex items-center gap-2">
             {vr.pandera_schema_passed ? (
-              <span className="text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+              <span className="text-[11px] font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Schema Contract Verified
               </span>
             ) : (
-              <span className="text-[11px] font-mono bg-red-500/10 text-red-400 border border-red-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+              <span className="text-[11px] font-mono bg-red-50 text-red-800 border border-red-200 px-2.5 py-1 rounded-full flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5" /> Contract Violations Detected
               </span>
             )}
@@ -245,7 +245,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
 
         {vr.pandera_failure_cases && vr.pandera_failure_cases.length > 0 ? (
           <div className="space-y-2 mt-3">
-            <h4 className="text-[10px] font-mono text-amber-400 uppercase tracking-wider">
+            <h4 className="text-[10px] font-mono text-amber-800 uppercase tracking-wider">
               Recorded Failure Cases ({vr.pandera_failure_count ?? vr.pandera_failure_cases.length} violations)
             </h4>
             <div className="bg-[#fafbf9] border border-[#e9ede8] rounded-lg overflow-x-auto">
@@ -264,7 +264,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                       <td className="p-2.5 text-[#557966] font-semibold">{fc.column}</td>
                       <td className="p-2.5 text-gray-600">{fc.check}</td>
                       <td className="p-2.5 text-amber-900 font-mono text-[10px]">{fc.failure_case}</td>
-                      <td className="p-2.5 text-center text-red-400 font-bold">{fc.violation_count}</td>
+                      <td className="p-2.5 text-center text-red-800 font-bold">{fc.violation_count}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -272,7 +272,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
             </div>
           </div>
         ) : (
-          <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg flex items-center gap-2 text-emerald-400 text-xs font-mono">
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-emerald-800 text-xs font-mono">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             Zero schema violations detected. All columns conform to Pandera strict contracts.
           </div>
@@ -422,10 +422,10 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                 <span
                   className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${
                     act.confidence === "high"
-                      ? "bg-green-500/10 text-green-400"
+                      ? "bg-green-50 text-green-800"
                       : act.confidence === "medium"
-                      ? "bg-amber-500/10 text-amber-400"
-                      : "bg-red-500/10 text-red-400"
+                      ? "bg-amber-50 text-amber-800"
+                      : "bg-red-50 text-red-800"
                   }`}
                 >
                   {act.confidence} confidence
@@ -479,7 +479,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                   </td>
                   <td className="py-2.5 text-center font-mono text-[11px]">
                     {diff.imputation_pct > 0 ? (
-                      <span className={diff.imputation_pct > 0.2 ? "text-amber-400 font-semibold" : "text-gray-600"}>
+                      <span className={diff.imputation_pct > 0.2 ? "text-amber-800 font-semibold" : "text-gray-600"}>
                         {(diff.imputation_pct * 100).toFixed(1)}%
                       </span>
                     ) : (
@@ -500,12 +500,12 @@ export function InsightsReport({ data }: { data: InsightsData }) {
         className="bg-white border border-[#e5eae4] rounded-xl p-5 space-y-4"
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-green-400">
+          <div className="flex items-center gap-2 text-green-800">
             <ShieldCheck className="w-4 h-4" />
             <h3 className="text-sm font-semibold">4. 7-Layer Validation Engine Results</h3>
           </div>
           <span className="text-xs font-mono text-gray-600">
-            <strong className="text-emerald-400">{vr.total_passed}</strong> / {vr.total_checks} Checks Passed
+            <strong className="text-emerald-800">{vr.total_passed}</strong> / {vr.total_checks} Checks Passed
           </span>
         </div>
 
@@ -513,13 +513,13 @@ export function InsightsReport({ data }: { data: InsightsData }) {
         {vr.escalation_flags && vr.escalation_flags.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider">
+              <h4 className="text-[10px] font-mono text-red-800 uppercase tracking-wider">
                 Escalation Circuit Breaker Triggers ({vr.escalation_flags.length})
               </h4>
               {vr.escalation_flags.length > 5 && (
                 <button
                   onClick={() => setVisibleFlagCount(prev => prev >= vr.escalation_flags.length ? 5 : vr.escalation_flags.length)}
-                  className="text-[11px] font-mono text-red-400 hover:text-red-300 underline"
+                  className="text-[11px] font-mono text-red-800 hover:text-red-900 underline"
                 >
                   {visibleFlagCount >= vr.escalation_flags.length ? "Collapse triggers" : `Show all ${vr.escalation_flags.length}`}
                 </button>
@@ -530,8 +530,8 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                 key={i}
                 className={`flex gap-3 text-xs p-3 rounded-lg border ${
                   flag.severity === "high"
-                    ? "bg-red-500/10 border-red-500/20 text-red-200"
-                    : "bg-amber-500/10 border-amber-500/20 text-amber-200"
+                    ? "bg-red-50 border-red-200 text-red-950"
+                    : "bg-amber-50 border-amber-200 text-amber-950"
                 }`}
               >
                 <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -539,7 +539,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                   <div className="font-semibold font-mono text-[11px] flex items-center justify-between">
                     <span>{flag.severity.toUpperCase()} PRIORITY ESCALATION</span>
                     {flag.column && (
-                      <span className="text-[10px] bg-red-500/20 px-2 py-0.5 rounded text-red-300 font-mono">
+                      <span className="text-[10px] bg-red-100 px-2 py-0.5 rounded text-red-900 font-mono">
                         {flag.column}
                       </span>
                     )}
@@ -555,7 +555,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
         {failedChecks.length > 0 ? (
           <div className="space-y-3 mt-5 pt-4 border-t border-[#e8ece7]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider">
+              <h4 className="text-[10px] font-mono text-red-800 uppercase tracking-wider">
                 Failed Rules & Violations ({failedChecks.length} Total)
               </h4>
               <span className="text-[11px] font-mono text-gray-600">
@@ -595,9 +595,9 @@ export function InsightsReport({ data }: { data: InsightsData }) {
               {displayedChecks.map((check: ValidationCheck, i: number) => (
                 <div
                   key={i}
-                  className="flex gap-3 text-xs p-3 rounded-lg border bg-red-500/5 border-red-500/20 text-red-200"
+                  className="flex gap-3 text-xs p-3 rounded-lg border bg-red-50 border-red-200 text-red-950"
                 >
-                  <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
+                  <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-800" />
                   <div className="flex-1">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="font-semibold text-xs text-[#26332b]">
@@ -652,7 +652,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
             </div>
           </div>
         ) : !vr.escalation_flags || vr.escalation_flags.length === 0 ? (
-          <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-green-400 text-sm font-mono mt-4">
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-center gap-2 text-green-800 text-sm font-mono mt-4">
             <ShieldCheck className="w-4 h-4" /> All 7-layer validation checks passed. Zero escalations required.
           </div>
         ) : null}

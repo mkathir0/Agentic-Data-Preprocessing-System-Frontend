@@ -81,7 +81,7 @@ export function ResultsPanel({ job }: { job: Job }) {
   const [copiedGxSuite, setCopiedGxSuite] = useState(false);
 
   useEffect(() => {
-    if (job.status !== "COMPLETED") return;
+    if (job.status !== "COMPLETED" && job.status !== "FAILED") return;
     setLoading(true); setError(null);
 
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
@@ -130,18 +130,20 @@ export function ResultsPanel({ job }: { job: Job }) {
     { id: "logs",         label: traces.length > 0 ? `LangSmith Traces (${traces.length})` : "Pipeline Logs", icon: <ScrollText className="w-3.5 h-3.5" /> },
   ];
 
-  // Stats derived from insights & validation engine
-  const rowCount = csvData ? csvData.totalRows.toLocaleString() : (insights?.profiler_data?.num_rows ?? "—");
-  const colCount = csvData ? String(csvData.headers.length) : "—";
-  const retries = insights?.retry_count?.toString() ?? "0";
+  const isFailed = job.status === "FAILED";
 
-  const dqBefore = vr?.data_quality_score_before ? `${vr.data_quality_score_before.toFixed(1)}` : "—";
-  const dqAfter = vr?.data_quality_score_after ? `${vr.data_quality_score_after.toFixed(1)}` : "98.4";
-  const dqImp = vr?.score_improvement ? `+${vr.score_improvement.toFixed(1)}%` : "+15.8%";
+  // Stats derived from insights & validation engine
+  const rowCount = csvData ? csvData.totalRows.toLocaleString() : (insights?.profiler_data?.num_rows ? String(insights.profiler_data.num_rows.toLocaleString()) : "—");
+  const colCount = csvData ? String(csvData.headers.length) : (insights?.profiler_data?.num_columns ? String(insights.profiler_data.num_columns) : "—");
+  const retries = (job.retry_count !== undefined ? job.retry_count : (insights?.retry_count ?? 0)).toString();
+
+  const dqBefore = vr?.data_quality_score_before !== undefined ? `${vr.data_quality_score_before.toFixed(1)}` : "—";
+  const dqAfter = vr?.data_quality_score_after !== undefined ? `${vr.data_quality_score_after.toFixed(1)}` : (insights?.profiler_data ? "—" : "—");
+  const dqImp = vr?.score_improvement !== undefined ? `${vr.score_improvement >= 0 ? "+" : ""}${vr.score_improvement.toFixed(1)}%` : "—";
 
   const panderaStatus = vr?.pandera_schema_passed !== undefined
     ? (vr.pandera_schema_passed ? "✓ Verified" : "✗ Breaker Triggered")
-    : (vr?.overall_passed ? "✓ Verified" : "—");
+    : (vr?.overall_passed ? "✓ Verified" : (isFailed ? "✗ Escalated" : "—"));
 
   return (
     <motion.div
@@ -153,12 +155,20 @@ export function ResultsPanel({ job }: { job: Job }) {
       {/* Header row */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-            <CheckCircle2 className="w-4 h-4 text-green-400" />
+          <div className={`w-8 h-8 rounded-full border flex items-center justify-center ${
+            isFailed
+              ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+              : "bg-green-500/10 border-green-500/20 text-green-400"
+          }`}>
+            {isFailed ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Pipeline Execution Completed</h3>
-            <p className="text-xs font-mono text-gray-500 truncate max-w-xs">{job.filename}</p>
+            <h3 className="text-sm font-semibold text-white">
+              {isFailed ? "Pipeline Completed · Circuit Breaker Tripped" : "Pipeline Execution Completed"}
+            </h3>
+            <p className="text-xs font-mono text-gray-500 truncate max-w-xs">
+              {isFailed ? `${job.filename} (Escalated for Human Review)` : job.filename}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -187,8 +197,8 @@ export function ResultsPanel({ job }: { job: Job }) {
         <StatCard
           icon={<Scale className="w-4 h-4 text-[#00F0FF]" />}
           label="Data Quality Score"
-          value={`${dqAfter}/100`}
-          sub={dqBefore !== "—" ? `${dqBefore} → ${dqAfter} (${dqImp})` : dqImp}
+          value={dqAfter !== "—" ? `${dqAfter}/100` : "—"}
+          sub={dqBefore !== "—" && dqAfter !== "—" ? `${dqBefore} → ${dqAfter} (${dqImp})` : (dqImp !== "—" ? dqImp : undefined)}
         />
         <StatCard
           icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />}
@@ -206,7 +216,7 @@ export function ResultsPanel({ job }: { job: Job }) {
           icon={<RefreshCw className="w-4 h-4 text-amber-400" />}
           label="Self-Healing Retries"
           value={`${retries} / 3`}
-          sub={vr?.key_conflict_count ? `${vr.key_conflict_count} PK conflicts` : "Circuit breaker"}
+          sub={vr?.key_conflict_count ? `${vr.key_conflict_count} PK conflicts` : (isFailed ? "Retries exhausted" : "Circuit breaker")}
         />
       </div>
 

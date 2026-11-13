@@ -13,6 +13,7 @@ export interface Job {
   current_step: string | null;
   error_message: string | null;
   cleaning_plan: any | null;
+  retry_count?: number;
 }
 
 export interface ValidationCheck {

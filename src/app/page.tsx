@@ -1,33 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Activity,
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCircle2,
+  ChevronDown,
   CircleAlert,
   Clock3,
-  Database,
   FileSpreadsheet,
   FileText,
   LoaderCircle,
   LockKeyhole,
   Plus,
   ShieldCheck,
-  Sparkles,
-  UploadCloud,
+  Upload,
   X,
 } from "lucide-react";
 import { ResultsPanel } from "@/components/dashboard/ResultsPanel";
-import { uploadDataset, getJobStatus, type Job } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { getJobStatus, type Job, uploadDataset } from "@/lib/api";
 
 const ACCEPTED_EXTENSIONS = [".csv", ".tsv", ".json", ".xlsx", ".xls", ".parquet"];
 const ACCEPTED_FILE_TYPES = ACCEPTED_EXTENSIONS.join(",");
 
-function fileExtension(name: string) {
+function extensionOf(name: string) {
   return name.slice(name.lastIndexOf(".")).toLowerCase();
 }
 
@@ -37,20 +35,8 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function statusFor(job: Job) {
-  if (job.status === "COMPLETED") {
-    return { label: "Verified", className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300", icon: CheckCircle2 };
-  }
-  if (job.current_step === "REVIEW_FLAGGED") {
-    return { label: "Review needed", className: "border-amber-400/20 bg-amber-400/10 text-amber-200", icon: CircleAlert };
-  }
-  if (job.status === "FAILED") {
-    return { label: "Stopped", className: "border-rose-400/20 bg-rose-400/10 text-rose-200", icon: CircleAlert };
-  }
-  if (job.status === "PENDING") {
-    return { label: "Queued", className: "border-amber-400/20 bg-amber-400/10 text-amber-200", icon: Clock3 };
-  }
-  return { label: "Processing", className: "border-cyan-400/20 bg-cyan-400/10 text-cyan-200", icon: Activity };
+function isTerminal(job: Job) {
+  return job.status === "COMPLETED" || job.status === "FAILED";
 }
 
 export default function Home() {
@@ -63,56 +49,87 @@ export default function Home() {
   const [activeJobs, setActiveJobs] = useState<Job[]>([]);
   const [selectedJobIndex, setSelectedJobIndex] = useState(0);
   const [isPolling, setIsPolling] = useState(false);
+  const [queuedForSeconds, setQueuedForSeconds] = useState(0);
   const uploadInputRef = useRef<HTMLInputElement>(null);
-  const activeJobsRef = useRef<Job[]>([]);
+  const jobsRef = useRef<Job[]>([]);
 
   useEffect(() => {
-    activeJobsRef.current = activeJobs;
+    jobsRef.current = activeJobs;
   }, [activeJobs]);
 
   useEffect(() => {
     if (!isPolling) return;
-
-    const pollInterval = window.setInterval(async () => {
-      const currentJobs = activeJobsRef.current;
+    const poll = window.setInterval(async () => {
+      const currentJobs = jobsRef.current;
       if (!currentJobs.length) return;
-
       try {
         const refreshed = await Promise.all(
-          currentJobs.map((job) =>
-            job.status === "COMPLETED" || job.status === "FAILED"
-              ? Promise.resolve(job)
-              : getJobStatus(job.id)
-          )
+          currentJobs.map((job) => (isTerminal(job) ? Promise.resolve(job) : getJobStatus(job.id)))
         );
         setActiveJobs(refreshed);
         setPollingError(null);
-        if (refreshed.every((job) => job.status === "COMPLETED" || job.status === "FAILED")) {
-          setIsPolling(false);
-        }
+        if (refreshed.every(isTerminal)) setIsPolling(false);
       } catch (error) {
-        setPollingError(error instanceof Error ? error.message : "Could not refresh job status.");
+        setPollingError(error instanceof Error ? error.message : "Status refresh failed.");
       }
-    }, 3000);
-
-    return () => window.clearInterval(pollInterval);
+    }, 2500);
+    return () => window.clearInterval(poll);
   }, [isPolling]);
 
+  const activeJob = activeJobs[selectedJobIndex];
+  const showProcessing = isUploading || Boolean(activeJob && !isTerminal(activeJob));
+  const hasResult = Boolean(
+    activeJob && isTerminal(activeJob) && (activeJob.status === "COMPLETED" || activeJob.progress >= 100)
+  );
+
+  useEffect(() => {
+    if (activeJob?.status !== "PENDING") return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      const createdAt = Date.parse(activeJob.created_at);
+      const origin = Number.isFinite(createdAt) ? createdAt : startedAt;
+      setQueuedForSeconds(Math.max(0, Math.floor((Date.now() - origin) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeJob?.id, activeJob?.status, activeJob?.created_at]);
+
   const addFiles = (incoming: File[]) => {
-    const validFiles = incoming.filter((file) => ACCEPTED_EXTENSIONS.includes(fileExtension(file.name)));
-    const invalidFiles = incoming.filter((file) => !ACCEPTED_EXTENSIONS.includes(fileExtension(file.name)));
-
+    const valid = incoming.filter((file) => ACCEPTED_EXTENSIONS.includes(extensionOf(file.name)));
+    const invalid = incoming.filter((file) => !ACCEPTED_EXTENSIONS.includes(extensionOf(file.name)));
     setFiles((current) => {
-      const unique = new Map(current.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file]));
-      for (const file of validFiles) unique.set(`${file.name}:${file.size}:${file.lastModified}`, file);
-      return Array.from(unique.values());
+      const next = new Map(current.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file]));
+      valid.forEach((file) => next.set(`${file.name}:${file.size}:${file.lastModified}`, file));
+      return Array.from(next.values());
     });
+    setUploadError(invalid.length ? `Unsupported file type: ${invalid.map((file) => file.name).join(", ")}` : null);
+  };
 
-    setUploadError(
-      invalidFiles.length
-        ? `Unsupported file${invalidFiles.length > 1 ? "s" : ""}: ${invalidFiles.map((file) => file.name).join(", ")}. Choose CSV, TSV, JSON, Excel, or Parquet files.`
-        : null
-    );
+  const handleUpload = async () => {
+    if (!files.length || isUploading) return;
+    setIsUploading(true);
+    setUploadError(null);
+    setPollingError(null);
+    setQueuedForSeconds(0);
+    try {
+      const jobs = await uploadDataset(files, instructions);
+      setActiveJobs(jobs);
+      setSelectedJobIndex(0);
+      setIsPolling(jobs.some((job) => !isTerminal(job)));
+      setFiles([]);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Upload failed. Check the API connection and try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const reset = () => {
+    setActiveJobs([]);
+    setSelectedJobIndex(0);
+    setPollingError(null);
+    setUploadError(null);
+    setIsPolling(false);
+    setQueuedForSeconds(0);
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -121,109 +138,89 @@ export default function Home() {
     addFiles(Array.from(event.dataTransfer.files));
   };
 
-  const handleUpload = async () => {
-    if (!files.length || isUploading) return;
-    setIsUploading(true);
-    setUploadError(null);
-    setPollingError(null);
-
-    try {
-      const jobs = await uploadDataset(files, instructions);
-      setActiveJobs(jobs);
-      setSelectedJobIndex(0);
-      setIsPolling(jobs.some((job) => job.status !== "COMPLETED" && job.status !== "FAILED"));
-      setFiles([]);
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "The upload could not be sent to the backend.");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleReset = () => {
-    setActiveJobs([]);
-    setSelectedJobIndex(0);
-    setPollingError(null);
-    setUploadError(null);
-    setIsPolling(false);
-  };
-
-  const activeJob = activeJobs[selectedJobIndex];
-  const activeStatus = activeJob ? statusFor(activeJob) : null;
-  const terminal = activeJob?.status === "COMPLETED" || activeJob?.status === "FAILED";
-  const hasResult = Boolean(
-    activeJob && terminal && (activeJob.status === "COMPLETED" || activeJob.progress >= 100)
-  );
-
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#080c12] text-slate-100 selection:bg-cyan-300/25 selection:text-white">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse at 16% 0%, rgba(0, 190, 220, 0.12), transparent 36%), radial-gradient(ellipse at 88% 30%, rgba(36, 93, 160, 0.10), transparent 30%), linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)",
-          backgroundSize: "auto, auto, 48px 48px, 48px 48px",
-          maskImage: "linear-gradient(to bottom, black, transparent 78%)",
-        }}
-      />
-
-      <header className="relative z-10 border-b border-white/[0.07] bg-[#080c12]/75 backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between px-5 sm:px-8">
-          <a href="#top" className="flex items-center gap-3" aria-label="Nexus Data home">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.10)]">
-              <Database className="h-5 w-5" />
+    <div className="min-h-screen bg-[#f6f7f5] text-[#202522]">
+      <header className="border-b border-[#e7e9e5] bg-[#f9faf8]">
+        <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-5 sm:px-8">
+          <a href="#home" className="flex items-center gap-2.5" aria-label="Nexus home">
+            <span className="grid size-8 place-items-center rounded-[10px] bg-[#253c32] text-white">
+              <span className="h-3 w-3 rounded-[3px] border-[1.5px] border-white/90" />
             </span>
-            <span>
-              <span className="block text-sm font-semibold tracking-[0.16em] text-white">NEXUS</span>
-              <span className="block text-[10px] font-medium tracking-[0.18em] text-slate-500">DATA WORKSPACE</span>
-            </span>
+            <span className="text-[15px] font-semibold tracking-[-0.04em]">nexus</span>
+            <span className="hidden h-4 w-px bg-[#dfe2dd] sm:block" />
+            <span className="hidden text-xs text-[#858b85] sm:block">Data workspace</span>
           </a>
-
-          <div className="hidden items-center gap-2 text-xs text-slate-400 sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)]" />
-            Evidence-backed data preparation
+          <div className="flex items-center gap-2 text-xs text-[#747b74]">
+            <span className="size-1.5 rounded-full bg-[#6c9a7f]" />
+            Private workspace
           </div>
-          <a href="#workflow" className="hidden text-xs font-medium text-slate-400 transition hover:text-white sm:inline-flex sm:items-center">
-            How it works <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
-          </a>
         </div>
       </header>
 
-      <main id="top" className="relative z-10 mx-auto w-full max-w-7xl px-5 pb-20 pt-10 sm:px-8 sm:pt-14">
-        {!activeJobs.length ? (
-          <motion.div initial={false} animate={{ opacity: 1, y: 0 }}>
-            <section className="grid min-w-0 grid-cols-1 items-center gap-12 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16">
-              <div className="w-full min-w-0 max-w-xl">
-                <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100/80">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Automated data quality
+      <main id="home" className="mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
+        <AnimatePresence mode="wait" initial={false}>
+          {showProcessing && activeJob && !isTerminal(activeJob) ? (
+            <ProcessingView
+              key="processing"
+              job={activeJob}
+              queuedForSeconds={queuedForSeconds}
+              pollingError={pollingError}
+              onBack={reset}
+            />
+          ) : isUploading ? (
+            <UploadingView key="uploading" filename={files[0]?.name} />
+          ) : activeJob ? (
+            <section key="result" className="mx-auto max-w-5xl">
+              <div className="mb-7 flex items-center justify-between">
+                <Button variant="ghost" onClick={reset} className="h-9 px-2 text-[#59615b] hover:bg-[#ecefeb]">
+                  <ArrowLeft /> New upload
+                </Button>
+                {activeJobs.length > 1 && (
+                  <select
+                    aria-label="Select uploaded file"
+                    value={selectedJobIndex}
+                    onChange={(event) => setSelectedJobIndex(Number(event.target.value))}
+                    className="max-w-[55%] rounded-lg border border-[#dfe3de] bg-white px-3 py-2 text-xs text-[#515a53]"
+                  >
+                    {activeJobs.map((job, index) => <option key={job.id} value={index}>{job.filename}</option>)}
+                  </select>
+                )}
+              </div>
+              {activeJob.status === "FAILED" && !hasResult && (
+                <div role="alert" className="mb-4 flex items-start gap-2 rounded-xl border border-[#edc8bd] bg-[#fff5f1] px-4 py-3 text-sm text-[#8b4738]">
+                  <CircleAlert className="mt-0.5 size-4 shrink-0" />
+                  {activeJob.error_message || "This run did not produce an approved output."}
                 </div>
-                <h1 className="text-4xl font-semibold leading-[1.08] tracking-[-0.045em] text-white sm:text-5xl lg:text-[3.65rem]">
-                  Make messy data
-                  <br />
-                  <span className="bg-gradient-to-r from-cyan-200 via-cyan-300 to-blue-300 bg-clip-text text-transparent">ready to trust.</span>
+              )}
+              {hasResult ? (
+                <ResultsPanel job={activeJob} onReset={reset} />
+              ) : (
+                <div className="mt-5 rounded-xl border border-[#e2e6e0] bg-white p-6 text-center">
+                  <p className="text-sm font-medium text-[#364139]">No result is available for this run.</p>
+                  <Button onClick={reset} className="mt-4 bg-[#294436] text-white hover:bg-[#20392c]">Try another file</Button>
+                </div>
+              )}
+            </section>
+          ) : (
+            <motion.section
+              key="upload"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22 }}
+              className="mx-auto max-w-[760px]"
+            >
+              <div className="mb-8 text-center sm:mb-10">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#829087]">Data preparation</p>
+                <h1 className="text-[32px] font-semibold leading-tight tracking-[-0.055em] text-[#202923] sm:text-[42px]">
+                  A cleaner start for your data.
                 </h1>
-                <p className="mt-6 w-full max-w-lg break-words text-base leading-7 text-slate-400 sm:text-lg">
-                  Upload a dataset. Nexus applies repairs supported by clear evidence, checks every output record, and sends uncertain issues to review.
+                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#747d75]">
+                  Upload a file to clean supported formatting issues and check the result.
                 </p>
-
-                <div className="mt-9 space-y-4">
-                  <FeatureLine icon={<Check className="h-3.5 w-3.5" />} title="Safe formatting repairs" detail="Normalize supported numbers, dates, booleans, whitespace, and exact duplicates." />
-                  <FeatureLine icon={<ShieldCheck className="h-3.5 w-3.5" />} title="No guessed business corrections" detail="Conflicting IDs and ambiguous values stay intact and are flagged." />
-                  <FeatureLine icon={<LockKeyhole className="h-3.5 w-3.5" />} title="Integrity checked before approval" detail="The output must match the allowed cleaning plan before it is approved." />
-                </div>
               </div>
 
-              <section aria-labelledby="upload-heading" className="w-full min-w-0 rounded-[26px] border border-white/[0.09] bg-[#0d131c]/90 p-4 shadow-[0_30px_100px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-6">
-                <div className="flex flex-wrap items-start justify-between gap-3 px-1 pb-5">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Start a new run</p>
-                    <h2 id="upload-heading" className="mt-2 text-xl font-semibold tracking-tight text-white">Add your dataset</h2>
-                  </div>
-                  <span className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-mono text-slate-400">6 FILE FORMATS</span>
-                </div>
-
+              <section className="rounded-2xl border border-[#e2e6e0] bg-white p-4 shadow-[0_18px_50px_rgba(37,60,50,0.06)] sm:p-6">
                 <div
                   onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }}
                   onDragOver={(event) => event.preventDefault()}
@@ -231,8 +228,8 @@ export default function Home() {
                     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDragging(false);
                   }}
                   onDrop={handleDrop}
-                  className={`relative rounded-2xl border border-dashed px-5 py-8 text-center transition sm:px-8 sm:py-10 ${
-                    isDragging ? "border-cyan-300 bg-cyan-300/[0.08]" : "border-slate-700/80 bg-[#090e15] hover:border-slate-500"
+                  className={`rounded-xl border border-dashed px-5 py-10 text-center transition-colors sm:py-12 ${
+                    isDragging ? "border-[#557966] bg-[#f1f6f2]" : "border-[#cfd7d0] bg-[#fafbf9] hover:border-[#91a99a]"
                   }`}
                 >
                   <input
@@ -241,230 +238,195 @@ export default function Home() {
                     multiple
                     accept={ACCEPTED_FILE_TYPES}
                     className="sr-only"
+                    aria-label="Choose dataset files"
                     onChange={(event) => {
                       if (event.target.files?.length) addFiles(Array.from(event.target.files));
                       event.target.value = "";
                     }}
-                    aria-label="Choose data files"
                   />
-                  <span className={`mx-auto grid h-12 w-12 place-items-center rounded-2xl border transition ${isDragging ? "border-cyan-200/30 bg-cyan-200/10 text-cyan-100" : "border-white/[0.08] bg-white/[0.04] text-slate-300"}`}>
-                    <UploadCloud className="h-5 w-5" />
+                  <span className="mx-auto grid size-11 place-items-center rounded-xl bg-[#eaf0eb] text-[#45634f]">
+                    <Upload className="size-5" strokeWidth={1.8} />
                   </span>
-                  <p className="mt-4 text-sm font-medium text-slate-100">{isDragging ? "Drop your files to add them" : "Drag files here to get started"}</p>
-                  <p className="mt-1.5 text-xs text-slate-500">Or choose files from your computer</p>
-                  <button
+                  <p className="mt-4 text-sm font-medium text-[#303a33]">{isDragging ? "Drop to add your files" : "Drop your files here"}</p>
+                  <p className="mt-1.5 text-xs text-[#8a928b]">or</p>
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={() => uploadInputRef.current?.click()}
-                    className="mt-5 inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3.5 text-xs font-medium text-white transition hover:border-cyan-200/30 hover:bg-cyan-200/[0.08]"
+                    className="mt-3 h-9 border-[#dce2dc] bg-white px-3.5 text-xs text-[#3d4940] shadow-sm hover:bg-[#f5f7f4]"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Browse files
-                  </button>
-                  <p className="mt-4 text-[10px] text-slate-600">CSV, TSV, JSON, Excel, or Parquet · multiple files supported</p>
+                    <Plus /> Choose files
+                  </Button>
+                  <p className="mt-4 text-[11px] text-[#a0a69f]">CSV, TSV, Excel, JSON, or Parquet</p>
                 </div>
 
                 {files.length > 0 && (
                   <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between px-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Selected files <span className="text-slate-400">({files.length})</span></p>
-                      <button type="button" onClick={() => setFiles([])} className="text-[10px] text-slate-500 transition hover:text-white">Clear all</button>
-                    </div>
-                    <div className="max-h-36 space-y-1.5 overflow-y-auto">
-                      {files.map((file) => (
-                        <div key={`${file.name}:${file.size}:${file.lastModified}`} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
-                          <FileSpreadsheet className="h-4 w-4 shrink-0 text-cyan-200/80" />
-                          <span className="min-w-0 flex-1 truncate text-xs text-slate-200">{file.name}</span>
-                          <span className="shrink-0 text-[10px] font-mono text-slate-500">{formatFileSize(file.size)}</span>
-                          <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles((current) => current.filter((item) => item !== file))} className="rounded-md p-1 text-slate-600 transition hover:bg-white/5 hover:text-white">
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    {files.map((file) => (
+                      <div key={`${file.name}:${file.size}:${file.lastModified}`} className="flex items-center gap-3 rounded-lg border border-[#e8ebe7] bg-white px-3 py-2.5">
+                        <FileSpreadsheet className="size-4 shrink-0 text-[#678272]" />
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-[#3c453e]">{file.name}</span>
+                        <span className="shrink-0 text-[11px] text-[#969e97]">{formatFileSize(file.size)}</span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${file.name}`}
+                          onClick={() => setFiles((current) => current.filter((candidate) => candidate !== file))}
+                          className="rounded p-1 text-[#9ba29c] hover:bg-[#f0f2ef] hover:text-[#4d5b50]"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {files.length > 1 && <p className="px-1 text-[11px] text-[#8a928b]">{files.length} files ready</p>}
                   </div>
                 )}
 
-                <label htmlFor="instructions" className="mb-2 mt-5 block text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                  Optional processing instructions
-                </label>
-                <textarea
-                  id="instructions"
-                  value={instructions}
-                  onChange={(event) => setInstructions(event.target.value)}
-                  placeholder="Describe a verified rule or constraint for this dataset…"
-                  rows={2}
-                  className="w-full resize-y rounded-xl border border-white/[0.08] bg-[#090e15] px-3.5 py-3 text-xs leading-5 text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-cyan-200/40 focus:ring-2 focus:ring-cyan-300/10"
-                />
-                <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-4 text-slate-600">
-                  <CircleAlert className="mt-0.5 h-3 w-3 shrink-0" /> Instructions do not override integrity checks or authorize unsupported corrections.
-                </p>
+                <details className="group mt-4 rounded-lg border border-[#eceeeb] px-3.5 py-3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium text-[#68736b]">
+                    Add a verified rule <span className="text-[11px] font-normal text-[#a1a7a1]">Optional</span>
+                    <ChevronDown className="ml-auto size-3.5 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <label htmlFor="instructions" className="sr-only">Verified processing instruction</label>
+                  <textarea
+                    id="instructions"
+                    value={instructions}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    placeholder="Add a known rule for this dataset…"
+                    rows={2}
+                    className="mt-3 w-full resize-y rounded-lg border border-[#e2e6e1] bg-[#fbfcfa] px-3 py-2.5 text-xs leading-5 text-[#39423b] outline-none placeholder:text-[#a4aaa4] focus:border-[#8fa798] focus:ring-2 focus:ring-[#79947f]/10"
+                  />
+                </details>
 
                 {uploadError && (
-                  <div role="alert" className="mt-4 flex gap-2 rounded-xl border border-rose-300/15 bg-rose-300/[0.06] p-3 text-xs leading-5 text-rose-200">
-                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /> <span>{uploadError}</span>
+                  <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-[#f0d1c8] bg-[#fff6f3] px-3 py-2.5 text-xs leading-5 text-[#994f3d]">
+                    <CircleAlert className="mt-0.5 size-3.5 shrink-0" /> {uploadError}
                   </div>
                 )}
 
-                <button
+                <Button
                   type="button"
                   onClick={handleUpload}
                   disabled={!files.length || isUploading}
-                  className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-300 text-sm font-semibold text-[#071018] shadow-[0_8px_30px_rgba(34,211,238,0.14)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="mt-4 h-11 w-full rounded-lg bg-[#294436] text-sm font-medium text-white shadow-none hover:bg-[#20392c] disabled:bg-[#aab8ad]"
                 >
-                  {isUploading ? <><LoaderCircle className="h-4 w-4 animate-spin" /> Uploading files…</> : <>Upload and validate <ArrowRight className="h-4 w-4" /></>}
-                </button>
-                <p className="mt-3 text-center text-[10px] text-slate-600">Raw files are kept unchanged. Results appear after the backend worker finishes.</p>
+                  Prepare dataset <ArrowRight className="size-4" />
+                </Button>
+                <p className="mt-3 flex items-center justify-center gap-1.5 text-[10px] text-[#a0a69f]">
+                  <LockKeyhole className="size-3" /> Your original file is kept unchanged
+                </p>
               </section>
-            </section>
 
-            <section id="workflow" className="mt-16 border-t border-white/[0.07] pt-8">
-              <div className="mb-5 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200/60">What happens next</p>
-                  <h2 className="mt-1.5 text-lg font-semibold text-white">A careful path from upload to output</h2>
-                </div>
-                <span className="hidden text-[10px] text-slate-600 sm:block">Uncertain data is surfaced, not silently rewritten.</span>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-[#858e86]">
+                <span className="inline-flex items-center gap-1.5"><Check className="size-3 text-[#6c8b75]" /> Safe formatting fixes</span>
+                <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3 text-[#6c8b75]" /> Integrity checked</span>
+                <span className="inline-flex items-center gap-1.5"><FileText className="size-3 text-[#6c8b75]" /> Ambiguous values flagged</span>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <WorkflowCard number="01" title="Profile" text="Inspect columns, formats, missingness, and possible anomalies." icon={<Database className="h-4 w-4" />} />
-                <WorkflowCard number="02" title="Repair safely" text="Apply supported representation fixes and preserve ambiguous values." icon={<Sparkles className="h-4 w-4" />} />
-                <WorkflowCard number="03" title="Validate" text="Compare records against the plan and report what needs review." icon={<ShieldCheck className="h-4 w-4" />} />
-              </div>
-            </section>
-          </motion.div>
-        ) : (
-          <section className="mx-auto max-w-5xl">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-              <button type="button" onClick={handleReset} className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs text-slate-400 transition hover:bg-white/5 hover:text-white">
-                <ArrowLeft className="h-4 w-4" /> New run
-              </button>
-              <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.15em] text-slate-500">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Processing workspace
-              </div>
-            </div>
-
-            {activeJobs.length > 1 && (
-              <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
-                {activeJobs.map((job, index) => {
-                  const state = statusFor(job);
-                  return (
-                    <button key={job.id} type="button" onClick={() => setSelectedJobIndex(index)} className={`flex min-w-0 max-w-xs items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition ${selectedJobIndex === index ? "border-cyan-200/25 bg-cyan-200/[0.06] text-white" : "border-white/[0.07] bg-white/[0.025] text-slate-400 hover:bg-white/[0.05]"}`}>
-                      <FileText className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{job.filename}</span>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] ${state.className}`}>{state.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {activeJob && activeStatus && (
-              <motion.div initial={false} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d131c]/90 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
-                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.07] px-5 py-4 sm:px-6">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-cyan-100"><FileSpreadsheet className="h-5 w-5" /></span>
-                    <div className="min-w-0">
-                      <h1 className="truncate text-sm font-semibold text-white sm:text-base">{activeJob.filename}</h1>
-                      <p className="mt-1 text-[10px] font-mono text-slate-500">Run {activeJob.id.slice(0, 8)} · {activeJob.current_step || activeJob.status}</p>
-                    </div>
-                  </div>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-medium ${activeStatus.className}`}>
-                    <activeStatus.icon className="h-3.5 w-3.5" /> {activeStatus.label}
-                  </span>
-                </div>
-
-                <div className="px-5 py-5 sm:px-6">
-                  {activeJob.status === "PENDING" ? (
-                    <div className="flex gap-3 rounded-xl border border-amber-200/15 bg-amber-200/[0.05] p-4">
-                      <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-200" />
-                      <div>
-                        <p className="text-sm font-medium text-amber-100">Your upload is queued for a worker.</p>
-                        <p className="mt-1 text-xs leading-5 text-amber-100/65">If it remains queued, start the backend worker in a separate terminal: <code className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-[10px] text-amber-50">uv run python -m app.worker</code></p>
-                      </div>
-                    </div>
-                  ) : activeJob.status === "PROCESSING" ? (
-                    <div>
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 text-sm font-medium text-white"><LoaderCircle className="h-4 w-4 animate-spin text-cyan-200" /> Worker is processing your dataset</div>
-                        <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500">In progress</span>
-                      </div>
-                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                        <div className="h-full w-1/3 animate-[nexus-progress_1.8s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-cyan-300 to-blue-400" />
-                      </div>
-                      <p className="mt-3 text-xs text-slate-500">The pipeline profiles, applies supported repairs, then validates the output. Results appear when the run finishes.</p>
-                    </div>
-                  ) : activeJob.status === "COMPLETED" ? (
-                    <div className="flex gap-3 rounded-xl border border-emerald-200/15 bg-emerald-200/[0.05] p-4">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
-                      <div>
-                        <p className="text-sm font-medium text-emerald-100">Validation passed. The output is approved.</p>
-                        <p className="mt-1 text-xs text-emerald-100/60">Review the audit and download the verified CSV below.</p>
-                      </div>
-                    </div>
-                  ) : activeJob.current_step === "REVIEW_FLAGGED" ? (
-                    <div className="flex gap-3 rounded-xl border border-amber-200/15 bg-amber-200/[0.05] p-4">
-                      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-200" />
-                      <div>
-                        <p className="text-sm font-medium text-amber-100">Processing finished with items for review.</p>
-                        <p className="mt-1 text-xs text-amber-100/60">The candidate preserves the source records, but validation did not approve it for production.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div role="alert" className="flex gap-3 rounded-xl border border-rose-200/15 bg-rose-200/[0.05] p-4">
-                      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-200" />
-                      <div>
-                        <p className="text-sm font-medium text-rose-100">The run did not produce an approved output.</p>
-                        <p className="mt-1 text-xs text-rose-100/65">{activeJob.error_message || "Check the validation report for details."}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {pollingError && (
-                    <div role="alert" className="mt-3 rounded-xl border border-rose-200/15 bg-rose-200/[0.04] px-4 py-3 text-xs text-rose-100/80">
-                      Could not refresh run status: {pollingError}. The page will retry automatically.
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-
-            {hasResult && activeJob && <ResultsPanel job={activeJob} onReset={handleReset} />}
-          </section>
-        )}
+            </motion.section>
+          )}
+        </AnimatePresence>
       </main>
+      <footer className="mx-auto flex max-w-6xl items-center justify-between px-5 pb-6 text-[10px] text-[#a2a8a2] sm:px-8">
+        <span>Nexus Data Workspace</span>
+        <span>Transparent cleanup · Human review</span>
+      </footer>
+    </div>
+  );
+}
 
-      {!activeJobs.length && (
-        <footer className="relative z-10 border-t border-white/[0.06]">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-5 text-[10px] text-slate-600 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-            <span>Designed for careful cleanup, record integrity, and transparent review.</span>
-            <span className="inline-flex items-center gap-1.5"><LockKeyhole className="h-3 w-3" /> Original uploads are never modified in place</span>
+function UploadingView({ filename }: { filename?: string }) {
+  return (
+    <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto flex min-h-[58vh] max-w-lg flex-col items-center justify-center text-center">
+      <span className="relative grid size-16 place-items-center rounded-2xl bg-[#e8efe9] text-[#45634f]">
+        <span className="absolute inset-0 animate-ping rounded-2xl border border-[#a8bcae]/50" />
+        <Upload className="size-6" />
+      </span>
+      <h1 className="mt-6 text-2xl font-semibold tracking-[-0.04em] text-[#26332b]">Sending your file</h1>
+      <p className="mt-2 max-w-sm text-sm leading-6 text-[#7e877f]">{filename ? `Uploading ${filename} to your workspace.` : "Uploading your files to the workspace."}</p>
+      <div className="mt-7 h-1 w-40 overflow-hidden rounded-full bg-[#e2e7e2]"><div className="h-full w-1/3 animate-[nexus-upload_1.25s_ease-in-out_infinite] rounded-full bg-[#557966]" /></div>
+    </motion.section>
+  );
+}
+
+function ProcessingView({
+  job,
+  queuedForSeconds,
+  pollingError,
+  onBack,
+}: {
+  job: Job;
+  queuedForSeconds: number;
+  pollingError: string | null;
+  onBack: () => void;
+}) {
+  const queued = job.status === "PENDING";
+  return (
+    <motion.section
+      key={job.id}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      className="mx-auto max-w-[760px]"
+    >
+      <Button variant="ghost" onClick={onBack} className="mb-6 h-9 px-2 text-[#68736b] hover:bg-[#ecefeb]">
+        <ArrowLeft /> Back to uploads
+      </Button>
+      <div className="overflow-hidden rounded-2xl border border-[#e2e6e0] bg-white shadow-[0_18px_50px_rgba(37,60,50,0.06)]">
+        <div className="flex items-center gap-3 border-b border-[#edf0ec] px-5 py-4 sm:px-7">
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#eef3ef] text-[#597562]"><FileSpreadsheet className="size-4" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-[#344037]">{job.filename}</p>
+            <p className="mt-0.5 text-[11px] text-[#9aa19a]">Dataset preparation</p>
           </div>
-        </footer>
-      )}
-    </div>
+          <span className="rounded-full bg-[#f1f4f1] px-2.5 py-1 text-[10px] font-medium text-[#758078]">{queued ? "In queue" : "Working"}</span>
+        </div>
+
+        <div className="px-5 py-10 text-center sm:px-10 sm:py-14">
+          <div className="relative mx-auto grid size-[74px] place-items-center rounded-full bg-[#edf3ee]">
+            <span className="absolute inset-0 animate-[nexus-ring_2.4s_ease-out_infinite] rounded-full border border-[#8eaa96]/40" />
+            {queued ? <Clock3 className="size-7 text-[#587363]" strokeWidth={1.6} /> : <LoaderCircle className="size-7 animate-spin text-[#587363]" strokeWidth={1.6} />}
+          </div>
+          <h1 className="mt-6 text-[25px] font-semibold tracking-[-0.045em] text-[#26332b] sm:text-[30px]">
+            {queued ? "Your file is in line." : "We’re preparing your data."}
+          </h1>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#7a847c]">
+            {queued
+              ? "A worker will pick it up automatically. We’ll show the result here as soon as processing begins."
+              : "Supported formatting repairs and integrity checks are running. This page updates automatically."}
+          </p>
+
+          <div className="mx-auto mt-9 flex max-w-[410px] items-center">
+            <StatusStep complete label="Received" />
+            <span className={`h-px flex-1 ${queued ? "bg-[#e1e6e1]" : "bg-[#8ea795]"}`} />
+            <StatusStep active={!queued} waiting={queued} label="Prepare" />
+            <span className="h-px flex-1 bg-[#e1e6e1]" />
+            <StatusStep label="Validated" />
+          </div>
+
+          {queued && queuedForSeconds >= 20 && (
+            <p className="mx-auto mt-7 max-w-md rounded-lg bg-[#f6f7f4] px-3 py-2.5 text-left text-[11px] leading-5 text-[#858e86]">
+              Still waiting? The backend worker must be running to pick up queued files.
+            </p>
+          )}
+          {pollingError && <p role="alert" className="mt-5 text-xs text-[#a25847]">Status refresh failed: {pollingError}. Retrying automatically.</p>}
+
+          <p className="mt-8 inline-flex items-center gap-1.5 text-[10px] text-[#a0a69f]">
+            <ShieldCheck className="size-3.5" /> Uncertain values are flagged for review, never guessed
+          </p>
+        </div>
+      </div>
+    </motion.section>
   );
 }
 
-function FeatureLine({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
+function StatusStep({ complete, active, waiting, label }: { complete?: boolean; active?: boolean; waiting?: boolean; label: string }) {
   return (
-    <div className="flex gap-3">
-      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-cyan-200/20 bg-cyan-200/[0.06] text-cyan-100">{icon}</span>
-      <div>
-        <p className="text-xs font-medium text-slate-200">{title}</p>
-        <p className="mt-1 text-[11px] leading-5 text-slate-500">{detail}</p>
-      </div>
-    </div>
-  );
-}
-
-function WorkflowCard({ number, title, text, icon }: { number: string; title: string; text: string; icon: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 transition hover:border-cyan-200/15 hover:bg-white/[0.04]">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-mono tracking-widest text-slate-600">{number}</span>
-        <span className="text-cyan-200/70">{icon}</span>
-      </div>
-      <h3 className="mt-4 text-sm font-semibold text-slate-100">{title}</h3>
-      <p className="mt-1.5 text-xs leading-5 text-slate-500">{text}</p>
+    <div className="flex min-w-[68px] flex-col items-center gap-2">
+      <span className={`grid size-7 place-items-center rounded-full border ${
+        complete ? "border-[#54735e] bg-[#54735e] text-white" : active ? "border-[#54735e] bg-white text-[#54735e]" : waiting ? "border-[#bbc6bd] bg-white text-[#87948a]" : "border-[#e0e5e0] bg-white text-[#b5bcb6]"
+      }`}>
+        {complete ? <Check className="size-3.5" /> : active ? <LoaderCircle className="size-3.5 animate-spin" /> : waiting ? <Clock3 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current" />}
+      </span>
+      <span className={`text-[10px] ${active || complete ? "font-medium text-[#58685c]" : "text-[#a0a69f]"}`}>{label}</span>
     </div>
   );
 }

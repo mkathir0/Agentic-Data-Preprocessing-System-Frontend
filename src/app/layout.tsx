@@ -15,13 +15,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="h-full antialiased dark"
+      className="h-full antialiased"
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-[#080c12] text-gray-100 font-sans selection:bg-cyan-300/25 selection:text-white">
+      <body className="min-h-full flex flex-col bg-[#f6f7f5] font-sans text-[#26332b] selection:bg-[#dce9de] selection:text-[#26332b]">
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem={false}
           disableTransitionOnChange
         >

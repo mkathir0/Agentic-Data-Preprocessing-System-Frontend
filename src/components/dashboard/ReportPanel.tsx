@@ -123,7 +123,7 @@ export function ReportPanel({ node, onClose }: ReportPanelProps) {
                   {activeTab === 'code' && (
                     <div className="space-y-4">
                       <h3 className="text-lg font-semibold">Generated Transformations</h3>
-                      <div className="bg-[#0d1117] p-4 rounded-lg border border-border/50 overflow-x-auto">
+                      <div className="bg-[#f8faf7] p-4 rounded-lg border border-border/50 overflow-x-auto">
                         <pre className="text-sm font-mono text-green-400">
 {`import pandas as pd
 import numpy as np
@@ -141,7 +141,7 @@ def clean_dataset(df):
                     </div>
                   )}
                   {activeTab === 'logs' && (
-                    <div className="space-y-2 font-mono text-xs text-muted-foreground bg-black/40 p-4 rounded-lg border border-border">
+                    <div className="space-y-2 font-mono text-xs text-muted-foreground bg-[#f4f7f3] p-4 rounded-lg border border-border">
                       <p>[INFO] Starting ProfilerAgent...</p>
                       <p>[INFO] Loading chunks 1 of 4...</p>
                       <p className="text-amber-500">[WARN] High cardinality detected on column X.</p>
@@ -162,7 +162,7 @@ def clean_dataset(df):
                   The LLM Planner is unsure how to handle a 40% null rate in the ZIP Code column.
                 </p>
                 <div className="flex gap-2">
-                  <button className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold py-2 rounded-lg transition-colors">
+                  <button className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 rounded-lg transition-colors">
                     Drop Column
                   </button>
                   <button className="flex-1 bg-card border border-border hover:bg-muted font-semibold py-2 rounded-lg transition-colors">

@@ -172,19 +172,19 @@ export const ExcelTable: React.FC<ExcelTableProps> = ({
       <div className="flex justify-between items-center mb-3">
         <span className="text-xs font-mono text-gray-500">
           {data.length} rows × {headers?.length ?? 0} cols
-          {selectedCells.size > 0 && <span className="ml-3 text-[#00F0FF]">{selectedCells.size} selected</span>}
+          {selectedCells.size > 0 && <span className="ml-3 text-[#557966]">{selectedCells.size} selected</span>}
         </span>
         <div className="flex gap-2">
           <button
             onClick={copyToClipboard}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#f4f7f3] hover:bg-[#edf2ed] border border-[#e2e8e2] text-gray-600 hover:text-[#26332b] rounded-lg transition-colors"
           >
             <Copy className="w-3 h-3" />
             {copyMsg ? "Copied!" : "Copy (⌘C)"}
           </button>
           <button
             onClick={exportToCSV}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#00F0FF]/10 hover:bg-[#00F0FF]/20 border border-[#00F0FF]/30 text-[#00F0FF] rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#edf4ee] hover:bg-[#e7f0e8] border border-[#dce7dd] text-[#557966] rounded-lg transition-colors"
           >
             <Download className="w-3 h-3" />
             Export CSV
@@ -193,12 +193,12 @@ export const ExcelTable: React.FC<ExcelTableProps> = ({
       </div>
 
       {/* Table */}
-      <div className={cn("border border-white/10 rounded-xl overflow-hidden bg-[#050505]", isSelecting && "select-none")}>
+      <div className={cn("border border-[#e2e8e2] rounded-xl overflow-hidden bg-[#f8faf7]", isSelecting && "select-none")}>
         <div className="overflow-auto max-h-96">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-white/5 sticky top-0 z-10">
-                <th className="w-10 h-8 border-b border-r border-white/10 text-xs font-mono font-medium text-gray-600 cursor-pointer hover:bg-white/10">
+              <tr className="bg-[#f4f7f3] sticky top-0 z-10">
+                <th className="w-10 h-8 border-b border-r border-[#e2e8e2] text-xs font-mono font-medium text-gray-500 cursor-pointer hover:bg-[#edf2ed]">
                   #
                 </th>
                 {headers?.map((header, colIndex) => (
@@ -206,8 +206,8 @@ export const ExcelTable: React.FC<ExcelTableProps> = ({
                     key={colIndex}
                     onClick={(e) => handleColHeaderClick(colIndex, e)}
                     className={cn(
-                      "min-w-28 h-8 border-b border-r border-white/10 px-2 text-xs font-mono font-semibold text-gray-400 text-left cursor-pointer hover:bg-white/10 whitespace-nowrap",
-                      isColSelected(colIndex) && "text-[#00F0FF] border-t border-t-[#00F0FF]"
+                      "min-w-28 h-8 border-b border-r border-[#e2e8e2] px-2 text-xs font-mono font-semibold text-gray-600 text-left cursor-pointer hover:bg-[#edf2ed] whitespace-nowrap",
+                      isColSelected(colIndex) && "text-[#557966] border-t border-t-[#557966]"
                     )}
                   >
                     {header}
@@ -223,14 +223,14 @@ export const ExcelTable: React.FC<ExcelTableProps> = ({
                   animate={{ opacity: 1 }}
                   transition={{ delay: Math.min(rowIndex * 0.01, 0.3) }}
                   className={cn(
-                    "hover:bg-white/3 transition-colors",
-                    rowIndex % 2 === 0 ? "bg-transparent" : "bg-white/[0.02]",
-                    isRowSelected(rowIndex) && "bg-[#00F0FF]/5"
+                    "hover:bg-[#f7faf6] transition-colors",
+                    rowIndex % 2 === 0 ? "bg-transparent" : "bg-[#fafbf9]",
+                    isRowSelected(rowIndex) && "bg-[#edf4ee]"
                   )}
                 >
                   <td
                     onClick={(e) => handleRowHeaderClick(rowIndex, e)}
-                    className="w-10 h-7 border-b border-r border-white/5 text-xs font-mono font-medium text-gray-700 text-center cursor-pointer hover:bg-white/10"
+                    className="w-10 h-7 border-b border-r border-[#e9ede8] text-xs font-mono font-medium text-gray-500 text-center cursor-pointer hover:bg-[#edf2ed]"
                   >
                     {rowIndex + 1}
                   </td>
@@ -238,9 +238,9 @@ export const ExcelTable: React.FC<ExcelTableProps> = ({
                     <td
                       key={colIndex}
                       className={cn(
-                        "min-w-28 h-7 border-b border-r border-white/5 px-2 text-xs font-mono relative cursor-pointer transition-colors",
-                        "hover:bg-[#00F0FF]/5",
-                        isCellSelected(rowIndex, colIndex) && "bg-[#00F0FF]/10 border border-[#00F0FF]/40",
+                        "min-w-28 h-7 border-b border-r border-[#e9ede8] px-2 text-xs font-mono relative cursor-pointer transition-colors",
+                        "hover:bg-[#edf4ee]",
+                        isCellSelected(rowIndex, colIndex) && "bg-[#edf4ee] border border-[#cbdccc]",
                         editingCell?.row === rowIndex && editingCell?.col === colIndex && "p-0"
                       )}
                       onClick={(e) => handleCellClick(rowIndex, colIndex, e)}
@@ -258,11 +258,11 @@ export const ExcelTable: React.FC<ExcelTableProps> = ({
                           onBlur={handleEditSubmit}
                           onKeyDown={handleEditKeyDown}
                           onMouseDown={(e) => e.stopPropagation()}
-                          className="w-full h-full px-2 text-xs font-mono bg-[#001a1a] border-0 outline-none text-[#00F0FF]"
+                          className="w-full h-full px-2 text-xs font-mono bg-[#edf3ee] border-0 outline-none text-[#557966]"
                           autoFocus
                         />
                       ) : (
-                        <span className="truncate block text-gray-300">{cell}</span>
+                        <span className="truncate block text-gray-700">{cell}</span>
                       )}
                     </td>
                   ))}

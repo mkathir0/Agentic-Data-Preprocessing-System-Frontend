@@ -92,16 +92,15 @@ function StatCard({
 }) {
   return (
     <motion.div
-      data-results-theme
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.03, y: -2 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      className="flex-1 min-w-[140px] bg-black border border-white/[0.08] rounded-xl p-4 flex flex-col gap-1.5 shadow-sm"
+      className="flex-1 min-w-[140px] bg-white border border-[#e2e8e2] rounded-xl p-4 flex flex-col gap-1.5 shadow-sm"
     >
       <div className="text-gray-500">{icon}</div>
-      <div className="text-lg font-mono font-bold text-[#00F0FF]">{value}</div>
-      <div className="text-xs font-semibold text-gray-300">{label}</div>
+      <div className="text-lg font-mono font-bold text-[#557966]">{value}</div>
+      <div className="text-xs font-semibold text-gray-700">{label}</div>
       {sub && <div className="text-[10px] font-mono text-gray-500 truncate">{sub}</div>}
     </motion.div>
   );
@@ -339,7 +338,7 @@ export function ResultsPanel({
 
   const dqBefore = vr?.data_quality_score_before !== undefined ? `${vr.data_quality_score_before.toFixed(1)}` : "—";
   const dqAfter = vr?.data_quality_score_after !== undefined ? `${vr.data_quality_score_after.toFixed(1)}` : "—";
-  const dqImp = vr?.score_improvement !== undefined ? `${vr.score_improvement >= 0 ? "+" : ""}${vr.score_improvement.toFixed(1)}%` : "—";
+  const dqImp = vr?.score_improvement !== undefined ? `${vr.score_improvement >= 0 ? "+" : ""}${vr.score_improvement.toFixed(1)} pts` : "—";
 
   const panderaStatus = vr?.pandera_schema_passed !== undefined
     ? vr.pandera_schema_passed
@@ -362,89 +361,33 @@ export function ResultsPanel({
       transition={{ duration: 0.5, delay: 0.2 }}
       className="w-full max-w-6xl mt-3 text-[#26332b]"
     >
-      {/* ── Top Navigation & Action Bar ──────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-4">
-        <div className="flex items-center gap-3">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#e2e8e2] bg-white px-5 py-4 shadow-sm sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
           {onReset && (
-            <motion.button
-              onClick={onReset}
-              whileHover={{ scale: 1.04, x: -2 }}
-              whileTap={{ scale: 0.96 }}
-            className="flex items-center gap-1.5 rounded-lg border border-[#e0e6df] bg-white px-3 py-2 text-xs font-medium text-[#58655b] transition-colors hover:bg-[#f3f6f2]"
-              title="Return to upload screen to process another dataset"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-[#00F0FF]" />
-              Process Another File
-            </motion.button>
+            <button onClick={onReset} title="Process another dataset" className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#e2e8e2] text-[#607064] transition hover:bg-[#f4f7f3]">
+              <ArrowLeft className="size-4" />
+            </button>
           )}
-
-          <div
-            className={`w-8 h-8 rounded-full border flex items-center justify-center ${
-              hasReviewItems
-                ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
-                : isFailed
-                ? "bg-red-500/10 border-red-500/20 text-red-400"
-                : "bg-green-500/10 border-green-500/20 text-green-400"
-            }`}
-          >
-            {hasReviewItems ? <AlertTriangle className="w-4 h-4" /> : isFailed ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          <div className={`grid size-9 shrink-0 place-items-center rounded-lg ${hasReviewItems ? "bg-amber-50 text-amber-700" : isFailed ? "bg-red-50 text-red-700" : "bg-[#edf4ee] text-[#557966]"}`}>
+            {hasReviewItems ? <AlertTriangle className="size-4" /> : isFailed ? <AlertCircle className="size-4" /> : <CheckCircle2 className="size-4" />}
           </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-white">
-                {hasReviewItems
-                  ? "Cleaned · Human Review Recommended"
-                  : isFailed
-                  ? "Execution Halted"
-                  : "Autonomous Preprocessing Completed"}
-              </h3>
-              {job.user_instructions && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/20 truncate max-w-xs">
-                  Prompt: {job.user_instructions}
-                </span>
-              )}
-            </div>
-            <p className="text-xs font-mono text-gray-500 truncate max-w-sm">
-              {job.filename}
-            </p>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#839087]">{hasReviewItems ? "Review recommended" : isFailed ? "Run stopped" : "Run complete"}</p>
+            <h1 className="mt-0.5 truncate text-sm font-semibold text-[#29362d] sm:text-base">{job.filename}</h1>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {cleaningCode && (
-            <button
-              onClick={handleDownloadScript}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-xl border border-white/10 transition-colors"
-              title="Download generated Python cleaning code"
-            >
-              <Code2 className="w-3.5 h-3.5 text-[#00F0FF]" />
-              Export .py Script
-            </button>
-          )}
-
-          {gxSuite && (
-            <button
-              onClick={handleDownloadGxSuite}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-xl border border-white/10 transition-colors"
-              title="Export Great Expectations JSON suite"
-            >
-              <FileJson className="w-3.5 h-3.5 text-[#00F0FF]" />
-              Export GX Suite
-            </button>
-          )}
-
-          <motion.button
-            onClick={handleDownloadCsv}
-            disabled={isDownloading || !canDownloadCandidate}
-            whileHover={{ scale: 1.05, y: -2 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            className="flex items-center gap-2 rounded-lg bg-[#294436] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#20392c] disabled:opacity-60"
-          >
-            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {isDownloading ? "Downloading..." : passedVerification ? "Download Verified CSV" : "Download Review Candidate"}
-          </motion.button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setActiveTab("report")} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dce5dc] bg-white px-3 text-xs font-medium text-[#4e6453] transition hover:bg-[#f7faf6]">
+            <FileText className="size-3.5" /> View report
+          </button>
+          <button onClick={handleDownloadReport} disabled={!reportMarkdown || isDownloadingReport} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#294436] px-3.5 text-xs font-semibold text-white transition hover:bg-[#20392c] disabled:opacity-40">
+            {isDownloadingReport ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+            Download report
+          </button>
+          <button onClick={handleDownloadCsv} disabled={isDownloading || !canDownloadCandidate} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dce5dc] bg-white px-3 text-xs font-medium text-[#4e6453] transition hover:bg-[#f7faf6] disabled:opacity-40">
+            {isDownloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+            {passedVerification ? "Verified CSV" : "Review candidate"}
+          </button>
         </div>
       </div>
 
@@ -453,14 +396,14 @@ export function ResultsPanel({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-5 p-4 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex items-start gap-3.5"
+          className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3.5"
         >
-          <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+          <AlertTriangle className="w-5 h-5 text-amber-700 mt-0.5 flex-shrink-0" />
           <div className="space-y-1">
-            <h4 className="text-sm font-semibold text-amber-200">
+            <h4 className="text-sm font-semibold text-amber-900">
               Autonomous Safety Protocol Active: Human Review Recommended
             </h4>
-            <p className="text-xs text-amber-300/80 leading-relaxed font-sans">
+            <p className="text-xs text-amber-900/80 leading-relaxed font-sans">
               This run has unresolved review items. Only supported, verified transformations may be applied; ambiguous values are preserved.
               {vr?.key_conflict_count && vr.key_conflict_count > 0 ? (
                 <>
@@ -486,14 +429,14 @@ export function ResultsPanel({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-5 p-4 bg-red-500/10 border border-red-500/25 rounded-2xl flex items-start gap-3.5"
+          className="mb-5 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3.5"
         >
-          <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+          <AlertCircle className="w-5 h-5 text-red-700 mt-0.5 flex-shrink-0" />
           <div className="space-y-1">
-            <h4 className="text-sm font-semibold text-red-200">
+            <h4 className="text-sm font-semibold text-red-900">
               Execution Halted
             </h4>
-            <p className="text-xs text-red-300/80 leading-relaxed font-sans">
+            <p className="text-xs text-red-900/80 leading-relaxed font-sans">
               {job.error_message || "This output has not passed the current integrity checks. Review the report or run the dataset again."}
             </p>
           </div>
@@ -502,29 +445,29 @@ export function ResultsPanel({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-5 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between flex-wrap gap-2"
+          className="mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between flex-wrap gap-2"
         >
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-700 flex-shrink-0" />
             <div>
-              <h4 className="text-sm font-semibold text-emerald-200">
+              <h4 className="text-sm font-semibold text-emerald-900">
                 Integrity and Validation Checks Passed
               </h4>
-              <p className="text-xs text-emerald-300/70">
+              <p className="text-xs text-emerald-800/80">
                 Output matches the supported cleaning plan and passed the implemented validation checks.
               </p>
             </div>
           </div>
-          <span className="text-xs font-mono px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full border border-emerald-500/30">
+          <span className="text-xs font-medium px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
             Integrity verified
           </span>
         </motion.div>
       )}
 
       {/* ── Executive Stat Cards ─────────────────────────────────────────── */}
-      <div className="flex gap-3 mb-5 flex-wrap">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          icon={<Scale className="w-4 h-4 text-[#00F0FF]" />}
+          icon={<Scale className="w-4 h-4 text-[#557966]" />}
           label="Data Quality Score"
           value={dqAfter !== "—" ? `${dqAfter}/100` : "—"}
           sub={
@@ -542,7 +485,7 @@ export function ResultsPanel({
           sub="Lazy DataFrameSchema"
         />
         <StatCard
-          icon={<Rows3 className="w-4 h-4 text-purple-400" />}
+          icon={<Rows3 className="w-4 h-4 text-[#557966]" />}
           label="Dataset Volume"
           value={cleanedRowsCount ? `${cleanedRowsCount.toLocaleString()} rows` : "—"}
           sub={
@@ -553,7 +496,7 @@ export function ResultsPanel({
         />
         <StatCard
           icon={<RefreshCw className="w-4 h-4 text-amber-400" />}
-          label="Self-Healing Retries"
+          label="Repair retries"
           value={`${job.retry_count ?? insights?.retry_count ?? 0} / 3`}
           sub={
             vr?.key_conflict_count
@@ -565,149 +508,55 @@ export function ResultsPanel({
         />
       </div>
 
-      {/* ── Actionable Next Steps & Production Handoff ──────────────────── */}
-      {passedVerification && (
-      <div className="mb-6 bg-gradient-to-r from-blue-950/20 via-[#050505] to-cyan-950/20 border border-[#00F0FF]/20 rounded-2xl p-5 shadow-lg">
-        <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-white/[0.08]">
-          <div className="flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 text-[#00F0FF]" />
-            <h4 className="text-sm font-semibold text-white tracking-wide">
-              Production Handoff & Recommended Next Steps
-            </h4>
-          </div>
-          <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/20">
-            Actionable Next Steps
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          {/* Step 1 */}
-          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
-                <Download className="w-3.5 h-3.5 text-[#00F0FF]" />
-                1. Analytics / BI Ready
-              </div>
-              <p className="text-gray-400 text-[11px] leading-relaxed">
-                Export the verified CSV for downstream analysis. Review its audit for the exact transformations and remaining domain assumptions.
-              </p>
+      <div className="grid gap-4 lg:grid-cols-[218px_minmax(0,1fr)]">
+        <aside aria-label="Run sections" className="h-fit rounded-2xl border border-[#e2e8e2] bg-white p-3 shadow-sm lg:sticky lg:top-6">
+          <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#929b93]">Run sections</p>
+          <nav className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-1" aria-label="Run details">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                className={`flex min-w-0 items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left text-xs font-medium transition ${
+                  activeTab === tab.id
+                    ? "border-[#dce7dd] bg-[#edf4ee] text-[#3c5e45]"
+                    : "border-transparent text-[#748076] hover:border-[#e7ece6] hover:bg-[#f8faf7] hover:text-[#38483c]"
+                }`}
+              >
+                <span className="shrink-0">{tab.icon}</span>
+                <span className="min-w-0 flex-1 truncate">{tab.label}</span>
+                {tab.badge && <span className="shrink-0 text-[10px] text-[#8b968d]">{tab.badge}</span>}
+              </button>
+            ))}
+          </nav>
+          {job.user_instructions && (
+            <div className="mt-3 border-t border-[#edf0ec] px-2 pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#98a198]">Verified rule</p>
+              <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-[#66736a]">{job.user_instructions}</p>
             </div>
-            <button
-              onClick={handleDownloadCsv}
-              disabled={isDownloading || !canDownloadCandidate}
-              className="mt-3 text-[11px] font-mono text-[#00F0FF] hover:underline flex items-center gap-1 self-start disabled:opacity-50"
-            >
-              Download CSV <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
+          )}
+        </aside>
 
-          {/* Step 2 */}
-          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
+        <section className="min-w-0 overflow-hidden rounded-2xl border border-[#e2e8e2] bg-white shadow-[0_12px_40px_rgba(37,60,50,0.05)]">
+          <div className="flex min-h-[76px] flex-wrap items-center justify-between gap-3 border-b border-[#e9ede8] px-5 py-4 sm:px-6">
             <div>
-              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
-                <Code2 className="w-3.5 h-3.5 text-purple-400" />
-                2. Automated Airflow / ETL
-              </div>
-              <p className="text-gray-400 text-[11px] leading-relaxed">
-                Review and test the generated script against future input contracts before scheduling it in your ETL system.
-              </p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#90a095]">{job.filename}</p>
+              <h2 className="mt-1 text-base font-semibold tracking-[-0.025em] text-[#29362d]">{tabs.find((tab) => tab.id === activeTab)?.label}</h2>
             </div>
-            <button
-              onClick={handleDownloadScript}
-              disabled={!cleaningCode}
-              className="mt-3 text-[11px] font-mono text-purple-400 hover:underline flex items-center gap-1 self-start disabled:opacity-50"
-            >
-              Export Script (.py) <ChevronRight className="w-3 h-3" />
-            </button>
+            {activeTab === "report" && reportMarkdown && (
+              <button onClick={handleDownloadReport} disabled={isDownloadingReport} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#294436] px-3.5 text-xs font-semibold text-white transition hover:bg-[#20392c] disabled:opacity-40">
+                {isDownloadingReport ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                Download report
+              </button>
+            )}
           </div>
-
-          {/* Step 3 */}
-          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
-                <FileJson className="w-3.5 h-3.5 text-emerald-400" />
-                3. CI/CD Quality Gate
-              </div>
-              <p className="text-gray-400 text-[11px] leading-relaxed">
-                Plug the Great Expectations JSON suite into your GitHub Actions CI/CD or dbt pipeline to automatically catch vendor schema regressions.
-              </p>
-            </div>
-            <button
-              onClick={handleDownloadGxSuite}
-              disabled={!gxSuite}
-              className="mt-3 text-[11px] font-mono text-emerald-400 hover:underline flex items-center gap-1 self-start disabled:opacity-50"
-            >
-              Export GX Suite (.json) <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-
-          {/* Step 4 */}
-          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                4. Domain Reconciliation
-              </div>
-              <p className="text-gray-400 text-[11px] leading-relaxed">
-                {vr?.key_conflict_count && vr.key_conflict_count > 0
-                  ? `Review the ${vr.key_conflict_count} flagged primary key collisions with business stakeholders before merging into production ERP / DB.`
-                  : "Inspect before/after distributions and confidence metrics in the audit tab before final production database ingestion."}
-              </p>
-            </div>
-            <button
-              onClick={() => setActiveTab("insights")}
-              className="mt-3 text-[11px] font-mono text-amber-400 hover:underline flex items-center gap-1 self-start"
-            >
-              View Quality Audit <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      )}
-
-      {/* ── Main Tabbed Panel ────────────────────────────────────────────── */}
-      <div className="overflow-hidden rounded-2xl border border-[#e2e7e1] bg-white shadow-[0_12px_40px_rgba(37,60,50,0.06)]">
-        {/* Tab Bar */}
-        <div className="flex gap-1 overflow-x-auto border-b border-[#e9ede8] bg-[#fbfcfa] px-3 pt-2 sm:px-4">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`relative flex items-center gap-2 whitespace-nowrap px-3 py-3 text-xs font-medium transition-colors sm:px-4 ${
-                activeTab === tab.id ? "text-[#365642]" : "text-[#8a938b] hover:text-[#455348]"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-              {tab.badge && (
-                <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    activeTab === tab.id
-                      ? "rounded-full border border-[#d6e4d9] bg-[#edf4ee] text-[#52735b]"
-                      : "rounded-full bg-[#f0f2ef] text-[#879087]"
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-              {activeTab === tab.id && (
-                <motion.div
-                  layoutId="activeTabLine"
-                  className="absolute bottom-0 left-3 right-3 h-0.5 rounded-t-full bg-[#557966] sm:left-4 sm:right-4"
-                  initial={false}
-                />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content Area */}
+          {/* Tab Content Area */}
         <div className="p-5 min-h-[350px]">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-56 gap-3">
-              <Loader2 className="w-6 h-6 text-[#00F0FF] animate-spin" />
-              <span className="text-sm font-mono text-gray-400">Loading dataset and insights...</span>
+              <Loader2 className="w-6 h-6 text-[#557966] animate-spin" />
+              <span className="text-sm font-mono text-gray-600">Loading dataset and insights...</span>
             </div>
           ) : error ? (
             <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-mono">
@@ -727,14 +576,14 @@ export function ResultsPanel({
                 {activeTab === "data" && (
                   <div className="space-y-4">
                     {/* View mode toggle controls */}
-                    <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-white/[0.06]">
-                      <div className="flex items-center bg-[#0d0d0d] border border-white/10 p-1 rounded-xl">
+                    <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[#e8ece7]">
+                      <div className="flex items-center bg-[#f3f6f2] border border-[#e2e8e2] p-1 rounded-xl">
                         <button
                           onClick={() => setDataViewMode("cleaned")}
                           className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             dataViewMode === "cleaned"
-                              ? "bg-[#00F0FF] text-black shadow-[0_0_12px_rgba(0,240,255,0.35)]"
-                              : "text-gray-400 hover:text-white"
+                              ? "bg-[#557966] text-white shadow-sm"
+                              : "text-gray-600 hover:text-[#26332b]"
                           }`}
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -744,8 +593,8 @@ export function ResultsPanel({
                           onClick={() => setDataViewMode("raw")}
                           className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             dataViewMode === "raw"
-                              ? "bg-amber-400 text-black shadow-[0_0_12px_rgba(251,191,36,0.35)]"
-                              : "text-gray-400 hover:text-white"
+                              ? "bg-amber-100 text-amber-900 ring-1 ring-amber-200"
+                              : "text-gray-600 hover:text-[#26332b]"
                           }`}
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -755,13 +604,13 @@ export function ResultsPanel({
 
                       <div className="text-xs font-mono text-gray-500">
                         {dataViewMode === "cleaned" ? (
-                          <span className="text-emerald-400/90 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="text-emerald-800 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                             Showing transformed output with strict Pandera types
                           </span>
                         ) : (
-                          <span className="text-amber-400/90 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          <span className="text-amber-800 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
                             Viewing original uncleaned raw dataset as uploaded
                           </span>
                         )}
@@ -773,27 +622,27 @@ export function ResultsPanel({
                       cleanedCsvData ? (
                         <>
                           {cleanedCsvData.totalRows > 200 && (
-                            <p className="text-xs font-mono text-cyan-400/70">
+                            <p className="text-xs font-mono text-[#557966]/70">
                               Previewing first 200 of {cleanedCsvData.totalRows.toLocaleString()} rows. Use &quot;Download Cleaned CSV&quot; for full output.
                             </p>
                           )}
                           <ExcelTable data={cleanedCsvData.rows} headers={cleanedCsvData.headers} />
                         </>
                       ) : (
-                        <p className="text-xs font-mono text-gray-600 text-center py-12">No cleaned data available.</p>
+                        <p className="text-xs font-mono text-gray-500 text-center py-12">No cleaned data available.</p>
                       )
                     ) : (
                       rawCsvData ? (
                         <>
                           {rawCsvData.totalRows > 200 && (
-                            <p className="text-xs font-mono text-amber-400/70">
+                            <p className="text-xs font-mono text-amber-800">
                               Previewing first 200 of {rawCsvData.totalRows.toLocaleString()} raw rows. Contains missing values, formatting anomalies, and untrimmed strings.
                             </p>
                           )}
                           <ExcelTable data={rawCsvData.rows} headers={rawCsvData.headers} />
                         </>
                       ) : (
-                        <p className="text-xs font-mono text-gray-600 text-center py-12">Original raw CSV not available.</p>
+                        <p className="text-xs font-mono text-gray-500 text-center py-12">Original raw CSV not available.</p>
                       )
                     )}
                   </div>
@@ -803,13 +652,13 @@ export function ResultsPanel({
                 {activeTab === "recipe" && (
                   <div className="space-y-6">
                     {/* Header with quick stats */}
-                    <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] flex-wrap gap-2">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#e2e8e2] flex-wrap gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-[#00F0FF]" />
-                          <h4 className="text-sm font-semibold text-white">Autonomous Cleaning Plan & Generated Code</h4>
+                          <Sparkles className="w-4 h-4 text-[#557966]" />
+                          <h4 className="text-sm font-semibold text-[#26332b]">Autonomous Cleaning Plan & Generated Code</h4>
                         </div>
-                        <p className="text-xs font-mono text-gray-400">
+                        <p className="text-xs font-mono text-gray-600">
                           {planActions.length} proposed actions • Check the audit to see which actions were applied or deferred
                         </p>
                       </div>
@@ -818,14 +667,14 @@ export function ResultsPanel({
                         <div className="flex items-center gap-2">
                           <button
                             onClick={handleCopyCode}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-lg border border-white/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f7f3] hover:bg-[#edf2ed] text-gray-700 hover:text-[#26332b] text-xs font-mono rounded-lg border border-[#e2e8e2] transition-colors"
                           >
                             {copiedCode ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                             {copiedCode ? "Copied" : "Copy Python Code"}
                           </button>
                           <button
                             onClick={handleDownloadScript}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00F0FF]/10 hover:bg-[#00F0FF]/20 text-[#00F0FF] text-xs font-mono rounded-lg border border-[#00F0FF]/30 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#edf4ee] hover:bg-[#e7f0e8] text-[#557966] text-xs font-mono rounded-lg border border-[#dce7dd] transition-colors"
                           >
                             <Download className="w-3.5 h-3.5" />
                             Download .py
@@ -837,8 +686,8 @@ export function ResultsPanel({
                     {/* Step-by-step Transformation Plan Actions */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <h5 className="text-[10px] font-mono text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <Filter className="w-3 h-3 text-[#00F0FF]" />
+                        <h5 className="text-[10px] font-mono text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                          <Filter className="w-3 h-3 text-[#557966]" />
                           Executed Transformation Actions ({filteredActions.length})
                         </h5>
 
@@ -849,8 +698,8 @@ export function ResultsPanel({
                               onClick={() => setRecipeFilter(lvl)}
                               className={`px-2 py-0.5 rounded transition-colors ${
                                 recipeFilter === lvl
-                                  ? "bg-[#00F0FF] text-black font-semibold"
-                                  : "text-gray-500 hover:text-gray-300 bg-white/5"
+                                  ? "bg-[#557966] text-white font-semibold"
+                                  : "text-gray-500 hover:text-gray-700 bg-[#f4f7f3]"
                               }`}
                             >
                               {lvl.toUpperCase()}
@@ -864,14 +713,14 @@ export function ResultsPanel({
                           {filteredActions.map((act, idx: number) => (
                             <div
                               key={idx}
-                              className="bg-[#050505] border border-white/[0.07] hover:border-white/[0.15] rounded-xl p-3 text-xs space-y-1.5 transition-colors"
+                              className="bg-[#f8faf7] border border-[#e5eae4] hover:border-[#dce4dc] rounded-xl p-3 text-xs space-y-1.5 transition-colors"
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span className="font-mono font-semibold text-white flex items-center gap-1.5 truncate">
-                                  <ChevronRight className="w-3.5 h-3.5 text-[#00F0FF] flex-shrink-0" />
-                                  <span className="text-[#00F0FF]">{act.action_type}</span>
+                                <span className="font-mono font-semibold text-[#26332b] flex items-center gap-1.5 truncate">
+                                  <ChevronRight className="w-3.5 h-3.5 text-[#557966] flex-shrink-0" />
+                                  <span className="text-[#557966]">{act.action_type}</span>
                                   {act.column ? (
-                                    <span className="text-gray-400 font-normal">on <strong className="text-gray-200">{act.column}</strong></span>
+                                    <span className="text-gray-600 font-normal">on <strong className="text-gray-800">{act.column}</strong></span>
                                   ) : (
                                     <span className="text-gray-500 font-normal">(global dataset)</span>
                                   )}
@@ -888,11 +737,11 @@ export function ResultsPanel({
                                   {act.confidence}
                                 </span>
                               </div>
-                              <p className="text-gray-400 text-[11px] leading-relaxed pl-5">
+                              <p className="text-gray-600 text-[11px] leading-relaxed pl-5">
                                 {act.explanation}
                               </p>
                               {act.assumption && (
-                                <p className="text-amber-400/80 italic text-[10px] pl-5">
+                                <p className="text-amber-800 italic text-[10px] pl-5">
                                   Assumption: {act.assumption}
                                 </p>
                               )}
@@ -907,8 +756,8 @@ export function ResultsPanel({
                     {/* Generated Python Code block */}
                     <div className="space-y-2 pt-2">
                       <div className="flex items-center justify-between">
-                        <h5 className="text-[10px] font-mono text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <Code2 className="w-3.5 h-3.5 text-[#00F0FF]" />
+                        <h5 className="text-[10px] font-mono text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                          <Code2 className="w-3.5 h-3.5 text-[#557966]" />
                           Generated Python Code (`clean_data(df)`)
                         </h5>
                         <span className="text-[10px] font-mono text-gray-500">
@@ -917,18 +766,18 @@ export function ResultsPanel({
                       </div>
 
                       {cleaningCode ? (
-                        <div className="relative rounded-xl border border-white/[0.1] bg-[#050505] overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-2 bg-[#0c0c0c] border-b border-white/[0.06] text-xs font-mono text-gray-400">
-                            <span className="text-cyan-400">clean_{job.filename.replace(/\.csv$/, "")}.py</span>
+                        <div className="relative rounded-xl border border-[#e1e8e1] bg-[#f8faf7] overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2 bg-[#f1f4f0] border-b border-[#e8ece7] text-xs font-mono text-gray-600">
+                            <span className="text-[#557966]">clean_{job.filename.replace(/\.csv$/, "")}.py</span>
                             <span className="text-gray-500 text-[10px]">Python 3.10+ (pandas, numpy)</span>
                           </div>
-                          <pre className="p-4 font-mono text-xs text-gray-300 overflow-x-auto max-h-96 leading-relaxed selection:bg-[#00F0FF]/30">
+                          <pre className="p-4 font-mono text-xs text-gray-700 overflow-x-auto max-h-96 leading-relaxed selection:bg-[#dce9de]">
                             {cleaningCode}
                           </pre>
                         </div>
                       ) : (
-                        <div className="p-8 text-center bg-[#050505] border border-white/[0.06] rounded-xl">
-                          <Code2 className="w-8 h-8 text-gray-700 mx-auto mb-2" />
+                        <div className="p-8 text-center bg-[#f8faf7] border border-[#e8ece7] rounded-xl">
+                          <Code2 className="w-8 h-8 text-gray-500 mx-auto mb-2" />
                           <p className="text-xs font-mono text-gray-500">Python script is compiling or unavailable.</p>
                         </div>
                       )}
@@ -948,7 +797,7 @@ export function ResultsPanel({
                           <InsightsReport data={insights} />
                         ) : (
                           <div className="flex flex-col items-center justify-center py-16 gap-3">
-                            <AlertCircle className="w-8 h-8 text-amber-400/60" />
+                            <AlertCircle className="w-8 h-8 text-amber-700/70" />
                             <p className="text-sm font-mono text-gray-500">
                               Legacy report detected — no rich validation data available.
                             </p>
@@ -957,7 +806,7 @@ export function ResultsPanel({
                       </>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-16 gap-3">
-                        <AlertCircle className="w-8 h-8 text-amber-400/60" />
+                        <AlertCircle className="w-8 h-8 text-amber-700/70" />
                         <p className="text-sm font-mono text-gray-500">
                           No insights available for this dataset.
                         </p>
@@ -971,26 +820,26 @@ export function ResultsPanel({
                   <div className="space-y-4">
                     {gxSuite ? (
                       <div>
-                        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] flex-wrap gap-2">
+                        <div className="flex items-center justify-between pb-3 border-b border-[#e2e8e2] flex-wrap gap-2">
                           <div>
-                            <h4 className="text-sm font-semibold text-white">
+                            <h4 className="text-sm font-semibold text-[#26332b]">
                               Great Expectations (GX) Export Suite
                             </h4>
-                            <p className="text-xs font-mono text-gray-400">
-                              Suite Name: <span className="text-[#00F0FF]">{gxSuite.expectation_suite_name}</span> • {gxSuite.expectations?.length || 0} assertions
+                            <p className="text-xs font-mono text-gray-600">
+                              Suite Name: <span className="text-[#557966]">{gxSuite.expectation_suite_name}</span> • {gxSuite.expectations?.length || 0} assertions
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={handleCopyGxSuite}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-lg border border-white/10 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f4f7f3] hover:bg-[#edf2ed] text-gray-700 hover:text-[#26332b] text-xs font-mono rounded-lg border border-[#e2e8e2] transition-colors"
                             >
                               {copiedGxSuite ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                               {copiedGxSuite ? "Copied" : "Copy Suite JSON"}
                             </button>
                             <button
                               onClick={handleDownloadGxSuite}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#00F0FF]/10 hover:bg-[#00F0FF]/20 text-[#00F0FF] text-xs font-mono rounded-lg border border-[#00F0FF]/30 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#edf4ee] hover:bg-[#e7f0e8] text-[#557966] text-xs font-mono rounded-lg border border-[#dce7dd] transition-colors"
                             >
                               <Download className="w-3.5 h-3.5" />
                               Download JSON
@@ -1000,14 +849,14 @@ export function ResultsPanel({
 
                         {/* Expectations list */}
                         <div className="mt-4 space-y-2">
-                          <h5 className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                          <h5 className="text-[10px] font-mono text-gray-600 uppercase tracking-wider">
                             Generated Assertions ({gxSuite.expectations?.length || 0})
                           </h5>
-                          <div className="bg-[#050505] border border-white/[0.07] rounded-xl overflow-x-auto max-h-60 divide-y divide-white/[0.03]">
+                          <div className="bg-[#f8faf7] border border-[#e5eae4] rounded-xl overflow-x-auto max-h-60 divide-y divide-[#edf0ec]">
                             {gxSuite.expectations?.map((exp, idx) => (
                               <div key={idx} className="p-2.5 flex items-center justify-between text-xs font-mono">
-                                <span className="text-cyan-400">{exp.expectation_type}</span>
-                                <span className="text-gray-400 text-[11px] truncate max-w-md">
+                                <span className="text-[#557966]">{exp.expectation_type}</span>
+                                <span className="text-gray-600 text-[11px] truncate max-w-md">
                                   {JSON.stringify(exp.kwargs)}
                                 </span>
                               </div>
@@ -1017,17 +866,17 @@ export function ResultsPanel({
 
                         {/* Full JSON code block */}
                         <div className="mt-4">
-                          <h5 className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-2">
+                          <h5 className="text-[10px] font-mono text-gray-600 uppercase tracking-wider mb-2">
                             Raw Expectation Suite Definition
                           </h5>
-                          <pre className="bg-[#050505] border border-white/10 rounded-xl p-4 font-mono text-[11px] text-gray-300 overflow-x-auto max-h-80">
+                          <pre className="bg-[#f8faf7] border border-[#e2e8e2] rounded-xl p-4 font-mono text-[11px] text-gray-700 overflow-x-auto max-h-80">
                             {JSON.stringify(gxSuite, null, 2)}
                           </pre>
                         </div>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-16 gap-3">
-                        <FileJson className="w-8 h-8 text-gray-700" />
+                        <FileJson className="w-8 h-8 text-gray-500" />
                         <p className="text-sm font-mono text-gray-500">No Great Expectations suite exported yet.</p>
                       </div>
                     )}
@@ -1092,7 +941,7 @@ export function ResultsPanel({
                           : "")}
                       </p>
                       <button type="button" onClick={() => setTraceRefresh((value) => value + 1)}
-                        className="text-xs font-mono text-gray-400 hover:text-white flex items-center gap-1">
+                        className="text-xs font-mono text-gray-600 hover:text-[#26332b] flex items-center gap-1">
                         <RefreshCw className="w-3 h-3" /> Refresh
                       </button>
                     </div>
@@ -1100,8 +949,8 @@ export function ResultsPanel({
                       <>
                         <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
-                            <p className="text-xs font-mono text-[#00F0FF]/90">
+                            <div className="w-2 h-2 rounded-full bg-[#557966] animate-pulse" />
+                            <p className="text-xs font-mono text-[#557966]">
                               Agent Execution Traces — {traces.length} trace events captured
                             </p>
                           </div>
@@ -1115,7 +964,7 @@ export function ResultsPanel({
                       </>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-16 gap-3">
-                        <ScrollText className="w-8 h-8 text-gray-700" />
+                        <ScrollText className="w-8 h-8 text-gray-500" />
                         <p className="text-sm font-mono text-gray-500">No LangSmith traces available yet. Refreshing may take a few seconds.</p>
                       </div>
                     )}
@@ -1125,6 +974,7 @@ export function ResultsPanel({
             </AnimatePresence>
           )}
         </div>
+        </section>
       </div>
     </motion.div>
   );

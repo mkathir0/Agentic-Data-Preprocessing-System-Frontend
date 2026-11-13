@@ -78,7 +78,7 @@ export function PipelineVisualizer({ nodes, onNodeClick }: PipelineVisualizerPro
                   <motion.div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-ping" />
                 )}
                 {node.state === "action-required" && (
-                  <div className="absolute -top-2 -right-2 bg-amber-500 text-black p-1 rounded-full shadow-lg">
+                  <div className="absolute -top-2 -right-2 bg-amber-100 text-amber-900 p-1 rounded-full shadow-sm ring-1 ring-amber-200">
                     <AlertTriangle className="w-3 h-3" />
                   </div>
                 )}

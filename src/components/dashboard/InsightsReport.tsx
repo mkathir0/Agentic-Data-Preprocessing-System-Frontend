@@ -27,6 +27,9 @@ export type { InsightsData };
 export function InsightsReport({ data }: { data: InsightsData }) {
   const [copiedGx, setCopiedGx] = useState(false);
   const [showGxJson, setShowGxJson] = useState(false);
+  const [visibleCheckCount, setVisibleCheckCount] = useState(20);
+  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+  const [visibleFlagCount, setVisibleFlagCount] = useState(10);
 
   if (!data.validation_report) {
     return (
@@ -75,6 +78,29 @@ export function InsightsReport({ data }: { data: InsightsData }) {
   ];
   const failedChecks = allChecks.filter((c: any) => !c.passed);
 
+  const categoryNames: Record<string, string> = {
+    schema: "Schema & Datatypes",
+    range_bounds: "Range & Bounds",
+    cross_field: "Cross-Field & Invariants",
+    distributional: "Distribution Shifts",
+    duplicates: "Duplicates & Keys",
+    format: "Format Compliance",
+    regression: "Null Regressions"
+  };
+
+  const categoryCounts = failedChecks.reduce((acc: Record<string, number>, c: any) => {
+    const cat = c.category || "other";
+    acc[cat] = (acc[cat] || 0) + 1;
+    return acc;
+  }, {});
+
+  const filteredFailedChecks = selectedCategory === "ALL"
+    ? failedChecks
+    : failedChecks.filter((c: any) => c.category === selectedCategory);
+
+  const displayedChecks = filteredFailedChecks.slice(0, visibleCheckCount);
+  const displayedFlags = (vr.escalation_flags || []).slice(0, visibleFlagCount);
+
   return (
     <div className="space-y-6">
       {/* ── Executive 4-Dimensional Data Quality Scorecard ── */}
@@ -101,10 +127,10 @@ export function InsightsReport({ data }: { data: InsightsData }) {
             <div className="text-right">
               <div className="text-[10px] font-mono text-gray-400 uppercase">Baseline vs Cleaned</div>
               <div className="text-sm font-mono text-gray-400">
-                <span className="text-gray-500 line-through mr-1">{dqBefore.toFixed(1)}</span>
-                <ArrowRight className="inline w-3 h-3 text-gray-500 mx-1" />
-                <span className="text-2xl font-bold font-mono text-[#00F0FF]">{dqAfter.toFixed(1)}</span>
-                <span className="text-xs text-gray-400">/100</span>
+                <span className="text-gray-500 line-through mr-1.5">{dqBefore.toFixed(1)}</span>
+                <ArrowRight className="inline w-3 h-3 text-gray-500 mx-1.5" />
+                <span className="text-2xl font-bold font-mono text-[#00F0FF] mr-1">{dqAfter.toFixed(1)}</span>
+                <span className="text-xs text-gray-400">/ 100</span>
               </div>
             </div>
             <div className="bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg text-emerald-400 font-mono text-xs font-bold flex items-center gap-1">
@@ -465,12 +491,23 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           </span>
         </div>
 
+        {/* Escalation Triggers */}
         {vr.escalation_flags && vr.escalation_flags.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider mb-1">
-              Escalation Circuit Breaker Triggers
-            </h4>
-            {vr.escalation_flags.map((flag: any, i: number) => (
+            <div className="flex items-center justify-between">
+              <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider">
+                Escalation Circuit Breaker Triggers ({vr.escalation_flags.length})
+              </h4>
+              {vr.escalation_flags.length > 5 && (
+                <button
+                  onClick={() => setVisibleFlagCount(prev => prev >= vr.escalation_flags.length ? 5 : vr.escalation_flags.length)}
+                  className="text-[11px] font-mono text-red-400 hover:text-red-300 underline"
+                >
+                  {visibleFlagCount >= vr.escalation_flags.length ? "Collapse triggers" : `Show all ${vr.escalation_flags.length}`}
+                </button>
+              )}
+            </div>
+            {displayedFlags.map((flag: any, i: number) => (
               <div
                 key={i}
                 className={`flex gap-3 text-xs p-3 rounded-lg border ${
@@ -480,36 +517,121 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                 }`}
               >
                 <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="font-semibold font-mono text-[11px]">
-                    {flag.severity.toUpperCase()} PRIORITY ESCALATION {flag.column ? `on ${flag.column}` : ""}
+                <div className="flex-1">
+                  <div className="font-semibold font-mono text-[11px] flex items-center justify-between">
+                    <span>{flag.severity.toUpperCase()} PRIORITY ESCALATION</span>
+                    {flag.column && (
+                      <span className="text-[10px] bg-red-500/20 px-2 py-0.5 rounded text-red-300 font-mono">
+                        {flag.column}
+                      </span>
+                    )}
                   </div>
-                  <div className="opacity-80 mt-0.5">{flag.reason}</div>
+                  <div className="opacity-90 mt-1 text-xs leading-relaxed">{flag.reason}</div>
                 </div>
               </div>
             ))}
           </div>
         )}
 
+        {/* Failed Rules & Violations (Grouped & Paginated in batches of 20) */}
         {failedChecks.length > 0 ? (
-          <div className="space-y-2 mt-4">
-            <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider mb-1">Failed Rules & Violations</h4>
-            {failedChecks.map((check: any, i: number) => (
-              <div key={i} className="flex gap-3 text-xs p-3 rounded-lg border bg-red-500/5 border-red-500/20 text-red-200">
-                <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
-                <div>
-                  <div className="font-semibold">
-                    {check.category.toUpperCase()}: {check.name}
-                  </div>
-                  <div className="opacity-80 mt-0.5">{check.details}</div>
-                  {check.violations > 0 && (
-                    <div className="text-red-400/80 mt-1 font-mono text-[10px]">
-                      {check.violations.toLocaleString()} violations detected
+          <div className="space-y-3 mt-5 pt-4 border-t border-white/[0.06]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h4 className="text-[10px] font-mono text-red-400 uppercase tracking-wider">
+                Failed Rules & Violations ({failedChecks.length} Total)
+              </h4>
+              <span className="text-[11px] font-mono text-gray-400">
+                Showing {displayedChecks.length} of {filteredFailedChecks.length}
+              </span>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex flex-wrap gap-1.5 py-1">
+              <button
+                onClick={() => { setSelectedCategory("ALL"); setVisibleCheckCount(20); }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-mono transition-colors ${
+                  selectedCategory === "ALL"
+                    ? "bg-[#00F0FF] text-black font-semibold"
+                    : "bg-white/[0.05] text-gray-400 hover:bg-white/[0.1]"
+                }`}
+              >
+                All ({failedChecks.length})
+              </button>
+              {Object.entries(categoryCounts).map(([cat, count]) => (
+                <button
+                  key={cat}
+                  onClick={() => { setSelectedCategory(cat); setVisibleCheckCount(20); }}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-mono transition-colors ${
+                    selectedCategory === cat
+                      ? "bg-[#00F0FF] text-black font-semibold"
+                      : "bg-white/[0.05] text-gray-400 hover:bg-white/[0.1]"
+                  }`}
+                >
+                  {categoryNames[cat] || cat} ({count})
+                </button>
+              ))}
+            </div>
+
+            {/* Cards List in 20 Batches */}
+            <div className="space-y-2">
+              {displayedChecks.map((check: any, i: number) => (
+                <div
+                  key={i}
+                  className="flex gap-3 text-xs p-3 rounded-lg border bg-red-500/5 border-red-500/20 text-red-200"
+                >
+                  <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-semibold text-xs text-white">
+                        {check.name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.05] border border-white/10 text-gray-300">
+                        {categoryNames[check.category] || check.category}
+                      </span>
                     </div>
-                  )}
+                    <div className="opacity-80 mt-1 text-xs">{check.details}</div>
+                    {check.violations > 0 && (
+                      <div className="text-red-400/90 mt-1.5 font-mono text-[10px]">
+                        {check.violations.toLocaleString()} violations detected
+                      </div>
+                    )}
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Pagination / Reveal in 20 Batches Controls */}
+            <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
+              <span className="text-xs font-mono text-gray-500">
+                Showing {displayedChecks.length} of {filteredFailedChecks.length} checks
+              </span>
+              <div className="flex items-center gap-2">
+                {filteredFailedChecks.length > visibleCheckCount && (
+                  <>
+                    <button
+                      onClick={() => setVisibleCheckCount(prev => prev + 20)}
+                      className="px-3 py-1.5 bg-[#00F0FF]/10 hover:bg-[#00F0FF]/20 text-[#00F0FF] text-xs font-mono font-medium rounded-lg border border-[#00F0FF]/30 transition-colors"
+                    >
+                      Reveal Next 20 Errors (+20)
+                    </button>
+                    <button
+                      onClick={() => setVisibleCheckCount(filteredFailedChecks.length)}
+                      className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-mono rounded-lg border border-white/10 transition-colors"
+                    >
+                      Show All ({filteredFailedChecks.length})
+                    </button>
+                  </>
+                )}
+                {visibleCheckCount > 20 && (
+                  <button
+                    onClick={() => setVisibleCheckCount(20)}
+                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs font-mono rounded-lg border border-white/10 transition-colors"
+                  >
+                    Collapse to 20
+                  </button>
+                )}
               </div>
-            ))}
+            </div>
           </div>
         ) : !vr.escalation_flags || vr.escalation_flags.length === 0 ? (
           <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center justify-center gap-2 text-green-400 text-sm font-mono mt-4">

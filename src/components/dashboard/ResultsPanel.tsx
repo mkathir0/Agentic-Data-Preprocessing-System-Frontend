@@ -224,7 +224,7 @@ export function ResultsPanel({
     },
     {
       id: "logs",
-      label: traces.length > 0 ? `LangSmith Traces (${traces.length})` : "Pipeline Logs",
+      label: traces.length > 0 ? `LangSmith Traces (${traces.length})` : "LangSmith Traces",
       icon: <ScrollText className="w-3.5 h-3.5" />,
     },
   ];
@@ -798,11 +798,16 @@ export function ResultsPanel({
                   <div>
                     {traces.length > 0 ? (
                       <>
-                        <div className="flex items-center gap-2 mb-3 px-1">
-                          <div className="w-2 h-2 rounded-full bg-[#00F0FF]" />
-                          <p className="text-xs font-mono text-[#00F0FF]/70">
-                            Live data from LangSmith — {traces.length} trace events
-                          </p>
+                        <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
+                            <p className="text-xs font-mono text-[#00F0FF]/90">
+                              Agent Execution Traces — {traces.length} trace events captured
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-mono text-gray-500">
+                            Endpoint: https://api.smith.langchain.com • ID: agentic-data-preprocessing-pipeline • Env: production
+                          </span>
                         </div>
                         <div className="h-[400px]">
                           <InteractiveLogsTable logs={logs} />

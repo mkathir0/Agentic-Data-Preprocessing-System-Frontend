@@ -6,21 +6,25 @@ import {
   CheckCircle2, Download, Table2, ScrollText, BarChart3,
   Rows3, Columns3, ShieldCheck, Loader2, AlertCircle,
   FileJson, Copy, Check, Scale, RefreshCw, AlertTriangle,
-  Code2, ArrowLeft, Sparkles, Filter, Eye, ChevronRight
+  Code2, ArrowLeft, Sparkles, Filter, Eye, ChevronRight,
+  FileText
 } from "lucide-react";
 import {
   Job,
   fetchCleanedCsvText,
   fetchRawCsvText,
+  fetchReport,
   downloadCleanedCsv,
   downloadJsonBlob,
-  downloadPythonScript
+  downloadPythonScript,
+  downloadReport,
+  downloadMarkdownBlob
 } from "@/lib/api";
 import { ExcelTable } from "@/components/ui/excel-style-table";
 import { InteractiveLogsTable, PipelineLog } from "@/components/ui/interactive-logs-table";
 import { InsightsReport, InsightsData } from "./InsightsReport";
 
-type Tab = "data" | "recipe" | "insights" | "expectations" | "logs";
+type Tab = "data" | "recipe" | "insights" | "expectations" | "report" | "logs";
 
 interface ParsedCsv {
   headers: string[];
@@ -123,6 +127,9 @@ export function ResultsPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [reportMarkdown, setReportMarkdown] = useState<string | null>(null);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [copiedReport, setCopiedReport] = useState(false);
   const [copiedGxSuite, setCopiedGxSuite] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [recipeFilter, setRecipeFilter] = useState<"ALL" | "high" | "medium" | "low">("ALL");
@@ -145,12 +152,14 @@ export function ResultsPanel({
       fetch(`${API_BASE}/jobs/${job.id}/langsmith-traces`, { headers })
         .then((r) => (r.ok ? r.json() : []))
         .catch(() => []),
+      fetchReport(job.id).catch(() => null),
     ])
-      .then(([cleanedCsv, rawCsv, insightsData, traceData]) => {
+      .then(([cleanedCsv, rawCsv, insightsData, traceData, reportText]) => {
         if (cleanedCsv) setCleanedCsvData(parseCsvText(cleanedCsv));
         if (rawCsv) setRawCsvData(parseCsvText(rawCsv));
         setInsights(insightsData);
         setTraces(traceData || []);
+        if (reportText) setReportMarkdown(reportText);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -167,6 +176,28 @@ export function ResultsPanel({
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const handleDownloadReport = async () => {
+    setIsDownloadingReport(true);
+    try {
+      if (reportMarkdown) {
+        downloadMarkdownBlob(reportMarkdown, `report_${job.filename.replace(/\.csv$/, "")}.md`);
+      } else {
+        await downloadReport(job.id, job.filename);
+      }
+    } catch (e) {
+      console.error("Report download failed:", e);
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  };
+
+  const handleCopyReport = () => {
+    if (!reportMarkdown) return;
+    navigator.clipboard.writeText(reportMarkdown);
+    setCopiedReport(true);
+    setTimeout(() => setCopiedReport(false), 2000);
   };
 
   const vr = insights?.validation_report;
@@ -223,6 +254,11 @@ export function ResultsPanel({
       icon: <FileJson className="w-3.5 h-3.5" />,
     },
     {
+      id: "report",
+      label: "Engineering Report (.md)",
+      icon: <FileText className="w-3.5 h-3.5 text-emerald-400" />,
+    },
+    {
       id: "logs",
       label: traces.length > 0 ? `LangSmith Traces (${traces.length})` : "LangSmith Traces",
       icon: <ScrollText className="w-3.5 h-3.5" />,
@@ -230,6 +266,9 @@ export function ResultsPanel({
   ];
 
   const isFailed = job.status === "FAILED";
+  const isReviewFlagged = job.current_step === "REVIEW_FLAGGED" || ((vr?.key_conflict_count ?? 0) > 0);
+  const hasReviewItems = isReviewFlagged || ((vr?.escalation_flags?.length ?? 0) > 0) || (isFailed && cleanedCsvData !== null);
+
   const rawRowsCount = rawCsvData?.totalRows ?? insights?.profiler_data?.num_rows ?? 0;
   const cleanedRowsCount = cleanedCsvData?.totalRows ?? rawRowsCount;
   const duplicatesDropped = vr?.exact_duplicates_removed ?? (rawRowsCount > cleanedRowsCount ? rawRowsCount - cleanedRowsCount : 0);
@@ -277,18 +316,24 @@ export function ResultsPanel({
 
           <div
             className={`w-8 h-8 rounded-full border flex items-center justify-center ${
-              isFailed
+              hasReviewItems
                 ? "bg-amber-500/10 border-amber-500/20 text-amber-400"
+                : isFailed
+                ? "bg-red-500/10 border-red-500/20 text-red-400"
                 : "bg-green-500/10 border-green-500/20 text-green-400"
             }`}
           >
-            {isFailed ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+            {hasReviewItems ? <AlertTriangle className="w-4 h-4" /> : isFailed ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
           </div>
 
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-white">
-                {isFailed ? "Cleaned · Escalated for Human Review" : "Autonomous Preprocessing Completed"}
+                {hasReviewItems
+                  ? "Cleaned · Human Review Recommended"
+                  : isFailed
+                  ? "Execution Halted"
+                  : "Autonomous Preprocessing Completed"}
               </h3>
               {job.user_instructions && (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/20 truncate max-w-xs">
@@ -318,9 +363,22 @@ export function ResultsPanel({
             <button
               onClick={handleDownloadGxSuite}
               className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-xl border border-white/10 transition-colors"
+              title="Export Great Expectations JSON suite"
             >
               <FileJson className="w-3.5 h-3.5 text-[#00F0FF]" />
               Export GX Suite
+            </button>
+          )}
+
+          {reportMarkdown && (
+            <button
+              onClick={handleDownloadReport}
+              disabled={isDownloadingReport}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-xl border border-white/10 transition-colors disabled:opacity-50"
+              title="Download generated Markdown quality audit report"
+            >
+              {isDownloadingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-emerald-400" />}
+              Export Report (.md)
             </button>
           )}
 
@@ -339,7 +397,7 @@ export function ResultsPanel({
       </div>
 
       {/* ── Executive Audit / Circuit Breaker Banner ─────────────────────── */}
-      {isFailed ? (
+      {hasReviewItems ? (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -352,9 +410,39 @@ export function ResultsPanel({
             </h4>
             <p className="text-xs text-amber-300/80 leading-relaxed font-sans">
               The AI engine executed all whitespace trimming, numerical normalizations, date parsing, and deduplication.
-              However, the validation engine detected{" "}
-              <strong className="text-amber-100">{vr?.key_conflict_count ?? "ambiguous"} primary key collisions</strong> (identical IDs with conflicting records).
-              Rather than blindly overwriting or discarding transactions, the self-healing circuit breaker safely preserved these rows for human domain review.
+              {vr?.key_conflict_count && vr.key_conflict_count > 0 ? (
+                <>
+                  {" "}However, the validation engine detected{" "}
+                  <strong className="text-amber-100">{vr.key_conflict_count} primary key collisions</strong> (identical IDs with conflicting records).
+                  Rather than blindly overwriting or discarding transactions, the self-healing circuit breaker safely preserved these rows for human domain review.
+                </>
+              ) : vr?.escalation_flags && vr.escalation_flags.length > 0 ? (
+                <>
+                  {" "}The validation engine flagged{" "}
+                  <strong className="text-amber-100">{vr.escalation_flags.length} domain / cross-field anomalies</strong> for verification.
+                  Cleaned dataset and transformation scripts are fully generated and ready below.
+                </>
+              ) : (
+                <>
+                  {" "}Minor schema boundary constraints were flagged for verification.
+                </>
+              )}
+            </p>
+          </div>
+        </motion.div>
+      ) : isFailed ? (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-5 p-4 bg-red-500/10 border border-red-500/25 rounded-2xl flex items-start gap-3.5"
+        >
+          <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold text-red-200">
+              Execution Halted
+            </h4>
+            <p className="text-xs text-red-300/80 leading-relaxed font-sans">
+              {job.error_message || "The preprocessing pipeline failed to complete."}
             </p>
           </div>
         </motion.div>
@@ -423,6 +511,104 @@ export function ResultsPanel({
               : "0 schema failures"
           }
         />
+      </div>
+
+      {/* ── Actionable Next Steps & Production Handoff ──────────────────── */}
+      <div className="mb-6 bg-gradient-to-r from-blue-950/20 via-[#050505] to-cyan-950/20 border border-[#00F0FF]/20 rounded-2xl p-5 shadow-lg">
+        <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-white/[0.08]">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-4 h-4 text-[#00F0FF]" />
+            <h4 className="text-sm font-semibold text-white tracking-wide">
+              Production Handoff & Recommended Next Steps
+            </h4>
+          </div>
+          <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/20">
+            Actionable Next Steps
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          {/* Step 1 */}
+          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
+                <Download className="w-3.5 h-3.5 text-[#00F0FF]" />
+                1. Analytics / BI Ready
+              </div>
+              <p className="text-gray-400 text-[11px] leading-relaxed">
+                Load the normalized CSV directly into Tableau, Power BI, Excel, or downstream analytics models. Whitespaces, sentinels, and dates are normalized.
+              </p>
+            </div>
+            <button
+              onClick={handleDownloadCsv}
+              disabled={isDownloading}
+              className="mt-3 text-[11px] font-mono text-[#00F0FF] hover:underline flex items-center gap-1 self-start disabled:opacity-50"
+            >
+              Download CSV <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Step 2 */}
+          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
+                <Code2 className="w-3.5 h-3.5 text-purple-400" />
+                2. Automated Airflow / ETL
+              </div>
+              <p className="text-gray-400 text-[11px] leading-relaxed">
+                Deploy the generated Python script into your Airflow DAG, cron job, or AWS Lambda for repeatable cleaning on future raw files without LLM costs.
+              </p>
+            </div>
+            <button
+              onClick={handleDownloadScript}
+              disabled={!cleaningCode}
+              className="mt-3 text-[11px] font-mono text-purple-400 hover:underline flex items-center gap-1 self-start disabled:opacity-50"
+            >
+              Export Script (.py) <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Step 3 */}
+          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
+                <FileJson className="w-3.5 h-3.5 text-emerald-400" />
+                3. CI/CD Quality Gate
+              </div>
+              <p className="text-gray-400 text-[11px] leading-relaxed">
+                Plug the Great Expectations JSON suite into your GitHub Actions CI/CD or dbt pipeline to automatically catch vendor schema regressions.
+              </p>
+            </div>
+            <button
+              onClick={handleDownloadGxSuite}
+              disabled={!gxSuite}
+              className="mt-3 text-[11px] font-mono text-emerald-400 hover:underline flex items-center gap-1 self-start disabled:opacity-50"
+            >
+              Export GX Suite (.json) <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Step 4 */}
+          <div className="p-3.5 bg-black/40 border border-white/5 rounded-xl flex flex-col justify-between hover:border-[#00F0FF]/30 transition-colors">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5 text-white font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                4. Domain Reconciliation
+              </div>
+              <p className="text-gray-400 text-[11px] leading-relaxed">
+                {vr?.key_conflict_count && vr.key_conflict_count > 0
+                  ? `Review the ${vr.key_conflict_count} flagged primary key collisions with business stakeholders before merging into production ERP / DB.`
+                  : "Inspect before/after distributions and confidence metrics in the audit tab before final production database ingestion."}
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveTab("insights")}
+              className="mt-3 text-[11px] font-mono text-amber-400 hover:underline flex items-center gap-1 self-start"
+            >
+              View Quality Audit <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ── Main Tabbed Panel ────────────────────────────────────────────── */}
@@ -793,7 +979,54 @@ export function ResultsPanel({
                   </div>
                 )}
 
-                {/* ── TAB 5: PIPELINE LOGS & LANGSMITH TRACES ───────────────── */}
+                {/* ── TAB 5: ENGINEERING REPORT (.MD) ───────────────────────── */}
+                {activeTab === "report" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] flex-wrap gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-emerald-400" />
+                          <h4 className="text-sm font-semibold text-white">Engineering Quality & Audit Report (.md)</h4>
+                        </div>
+                        <p className="text-xs font-mono text-gray-400">
+                          Complete Markdown audit generated by ReporterAgent • Saved to outputs/report_{job.filename.replace(/\.csv$/, ".md")}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleCopyReport}
+                          disabled={!reportMarkdown}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-lg border border-white/10 transition-colors disabled:opacity-50"
+                        >
+                          {copiedReport ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedReport ? "Copied" : "Copy Markdown"}
+                        </button>
+                        <button
+                          onClick={handleDownloadReport}
+                          disabled={!reportMarkdown || isDownloadingReport}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-mono rounded-lg border border-emerald-500/30 transition-colors disabled:opacity-50"
+                        >
+                          {isDownloadingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          Download .md
+                        </button>
+                      </div>
+                    </div>
+
+                    {reportMarkdown ? (
+                      <div className="bg-[#050505] border border-white/10 rounded-xl p-5 font-mono text-[11px] text-gray-300 leading-relaxed overflow-x-auto max-h-[600px] whitespace-pre-wrap select-text">
+                        {reportMarkdown}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <FileText className="w-8 h-8 text-gray-700" />
+                        <p className="text-sm font-mono text-gray-500">Generating report or report not available yet.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── TAB 6: PIPELINE LOGS & LANGSMITH TRACES ───────────────── */}
                 {activeTab === "logs" && (
                   <div>
                     {traces.length > 0 ? (

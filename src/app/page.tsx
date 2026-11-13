@@ -179,6 +179,7 @@ export default function Home() {
                 status={activeJob?.status as any ?? "PENDING"}
                 progress={activeJob?.progress ?? 0}
                 filename={activeJob?.filename}
+                currentStep={activeJob?.current_step}
               />
 
               {/* Error traceback (only for unhandled early aborts) */}

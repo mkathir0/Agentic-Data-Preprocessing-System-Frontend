@@ -45,13 +45,15 @@ interface EnterpriseAIPipelineProps {
   status?: JobStatus
   progress?: number
   filename?: string
+  currentStep?: string | null
 }
 
-export default function EnterpriseAIPipeline({ status = "PROCESSING", progress = 0, filename }: EnterpriseAIPipelineProps) {
+export default function EnterpriseAIPipeline({ status = "PROCESSING", progress = 0, filename, currentStep }: EnterpriseAIPipelineProps) {
   const activeStage = getStageIndex(progress, status)
   const isCompleted = status === "COMPLETED"
   const isFailed = status === "FAILED"
   const isRunning = status === "PROCESSING" || status === "PENDING"
+  const isReviewFlagged = isCompleted && currentStep === "REVIEW_FLAGGED"
 
   const paths = {
     p1: "M116,88 L158,88",
@@ -69,7 +71,9 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
     3: "Executing cleaning code in isolated Python subprocess...",
     4: "Pandera verifying lazy schema contract, 4D quality score & 7-layer invariants...",
   }
-  const completedMessage = "✓ Pipeline complete. Cleaned CSV and report are ready."
+  const completedMessage = isReviewFlagged
+    ? "✓ Preprocessing complete. Cleaned CSV ready; domain edge cases flagged for review."
+    : "✓ Pipeline complete. Cleaned CSV and report are ready."
   const failedMessage = "✗ Pipeline failed. Max retries exceeded. Check the report for details."
 
   const currentMessage = isFailed ? failedMessage : isCompleted ? completedMessage : (stageMessages[activeStage] ?? "Initializing pipeline...")
@@ -99,6 +103,7 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
         <div className="flex items-center gap-[7px]">
           <motion.span
             className={`w-[6px] h-[6px] rounded-full inline-block shadow-[0_0_8px] ${
+              isReviewFlagged ? "bg-amber-400 shadow-amber-400/80" :
               isCompleted ? "bg-green-500 shadow-green-500/80" :
               isFailed ? "bg-red-500 shadow-red-500/80" :
               "bg-[#00F0FF] shadow-[#00F0FF]/80"
@@ -107,11 +112,11 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
             transition={{ duration: 2, repeat: isRunning ? Infinity : 0, ease: "easeInOut" }}
           />
           <span className="text-[10px] text-white/50 tracking-[0.1em] font-mono font-medium">
-            AGENT PIPELINE · {isCompleted ? "DONE" : isFailed ? "FAILED" : "LIVE"}
+            AGENT PIPELINE · {isReviewFlagged ? "REVIEW FLAGGED" : isCompleted ? "DONE" : isFailed ? "FAILED" : "LIVE"}
           </span>
         </div>
         <span className="text-[10px] text-white/[0.28] font-mono">
-          {isCompleted ? "5/5 nodes complete" : isFailed ? "pipeline halted" : `${activeStage}/5 nodes · ${progress.toFixed(0)}%`}
+          {isReviewFlagged ? "5/5 nodes · review flags" : isCompleted ? "5/5 nodes complete" : isFailed ? "pipeline halted" : `${activeStage}/5 nodes · ${progress.toFixed(0)}%`}
         </span>
       </div>
 
@@ -230,8 +235,8 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
       <div className="border-t border-white/[0.06] px-[18px] py-[10px] flex gap-[22px] items-center bg-black/60">
         <div>
           <div className="text-[9px] text-white/30 tracking-[0.09em] mb-[3px] font-semibold">STATUS</div>
-          <div className={`text-[14px] font-mono font-medium ${isCompleted ? "text-green-400" : isFailed ? "text-red-400" : "text-[#00F0FF]"}`}>
-            {isCompleted ? "✓ DONE" : isFailed ? "✗ FAILED" : "LIVE"}
+          <div className={`text-[14px] font-mono font-medium ${isReviewFlagged ? "text-amber-400" : isCompleted ? "text-green-400" : isFailed ? "text-red-400" : "text-[#00F0FF]"}`}>
+            {isReviewFlagged ? "⚠ REVIEW" : isCompleted ? "✓ DONE" : isFailed ? "✗ FAILED" : "LIVE"}
           </div>
         </div>
         <div>

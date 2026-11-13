@@ -199,3 +199,31 @@ export function downloadPythonScript(code: string, filename: string): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/** Downloads Markdown engineering report via API */
+export async function downloadReport(jobId: string, filename: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/report`, { headers: authHeaders });
+  if (!response.ok) throw new Error("Report download failed");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `report_${filename.replace(/\.csv$/, "")}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** Downloads Markdown string as a file */
+export function downloadMarkdownBlob(content: string, filename: string): void {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

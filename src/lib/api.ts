@@ -14,6 +14,7 @@ export interface Job {
   error_message: string | null;
   cleaning_plan: any | null;
   retry_count?: number;
+  user_instructions?: string;
 }
 
 export interface ValidationCheck {
@@ -107,17 +108,22 @@ export interface ValidationReport {
 export interface InsightsData {
   job_id: string;
   filename: string;
+  user_instructions?: string;
   profiler_data: any;
   plan_data: any;
   validation_report: ValidationReport | null;
   retry_count: number;
+  cleaning_code?: string;
 }
 
-export async function uploadDataset(files: File[]): Promise<Job[]> {
+export async function uploadDataset(files: File[], instructions?: string): Promise<Job[]> {
   const formData = new FormData();
   files.forEach((file) => {
     formData.append("files", file); // Appending multiple files under 'files' key
   });
+  if (instructions && instructions.trim()) {
+    formData.append("instructions", instructions.trim());
+  }
   const response = await fetch(`${API_BASE_URL}/jobs/upload`, { method: "POST", headers: authHeaders, body: formData });
   if (!response.ok) { const err = await response.text(); throw new Error(`Upload failed: ${err}`); }
   return response.json();
@@ -143,6 +149,13 @@ export async function fetchCleanedCsvText(jobId: string): Promise<string> {
   return response.text();
 }
 
+/** Fetches the raw original CSV as text (for before/after comparison) */
+export async function fetchRawCsvText(jobId: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/raw`, { headers: authHeaders });
+  if (!response.ok) throw new Error("Raw CSV not available");
+  return response.text();
+}
+
 /** Downloads cleaned CSV via blob — required to inject X-API-Key header that window.location.href cannot send */
 export async function downloadCleanedCsv(jobId: string, filename: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/download`, { headers: authHeaders });
@@ -158,6 +171,8 @@ export async function downloadCleanedCsv(jobId: string, filename: string): Promi
   URL.revokeObjectURL(url);
 }
 
+
+
 /** Downloads JSON payload as a file (e.g. Great Expectations Suite) */
 export function downloadJsonBlob(data: any, filename: string): void {
   const jsonStr = JSON.stringify(data, null, 2);
@@ -166,6 +181,19 @@ export function downloadJsonBlob(data: any, filename: string): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** Downloads generated Python cleaning script */
+export function downloadPythonScript(code: string, filename: string): void {
+  const blob = new Blob([code], { type: "text/x-python" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `clean_${filename.replace(/\.csv$/, "")}.py`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -42,7 +42,7 @@ export default function Home() {
     return () => clearInterval(pollInterval);
   }, [isPolling]); // Only re-run when isPolling changes, NOT on every job update
 
-  const handleSend = async (_message: string, files?: File[]) => {
+  const handleSend = async (message: string, files?: File[]) => {
     if (!files || files.length === 0) {
       alert("Please upload at least one dataset to process.");
       return;
@@ -50,7 +50,7 @@ export default function Home() {
     try {
       setHasStarted(true);
       setIsUploading(true);
-      const jobs = await uploadDataset(files);
+      const jobs = await uploadDataset(files, message);
       setActiveJobs(jobs);
       setSelectedJobIndex(0);
       setIsUploading(false);
@@ -61,6 +61,13 @@ export default function Home() {
       setHasStarted(false);
       setIsUploading(false);
     }
+  };
+
+  const handleReset = () => {
+    setHasStarted(false);
+    setActiveJobs([]);
+    setSelectedJobIndex(0);
+    setIsPolling(false);
   };
 
   const activeJob = activeJobs[selectedJobIndex];
@@ -174,8 +181,8 @@ export default function Home() {
                 filename={activeJob?.filename}
               />
 
-              {/* Error traceback */}
-              {activeJob?.error_message && isFailed && (
+              {/* Error traceback (only for unhandled early aborts) */}
+              {activeJob?.error_message && isFailed && activeJob.progress < 100 && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -188,7 +195,7 @@ export default function Home() {
 
               {/* Results section — when COMPLETED or when FAILED with finished run */}
               {(isCompleted || (isFailed && activeJob?.progress === 100)) && activeJob && (
-                <ResultsPanel job={activeJob} />
+                <ResultsPanel job={activeJob} onReset={handleReset} />
               )}
             </motion.div>
           )}

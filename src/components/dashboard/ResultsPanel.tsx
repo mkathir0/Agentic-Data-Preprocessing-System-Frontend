@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Download, Table2, ScrollText, BarChart3,
@@ -980,7 +980,114 @@ export function ResultsPanel({
   );
 }
 
+interface ReportSection {
+  title: string;
+  source: string;
+}
+
+function getReportSections(source: string): ReportSection[] {
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const hasSubsections = lines.some((line) => /^##\s+/.test(line));
+  const sectionDepth = hasSubsections ? 2 : 1;
+  const sections: ReportSection[] = [];
+  let title = "Overview";
+  let body: string[] = [];
+  let hasBody = false;
+
+  const saveSection = () => {
+    const content = body.join("\n").trim();
+    if (content) sections.push({ title, source: content });
+  };
+
+  for (const line of lines) {
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    const depth = heading?.[1].length;
+
+    if (hasSubsections && depth === 1 && !hasBody && body.length === 0) {
+      // Keep the report's document title out of the numbered section list.
+      continue;
+    }
+
+    if (depth === sectionDepth) {
+      saveSection();
+      title = heading?.[2].trim() || `Section ${sections.length + 1}`;
+      body = [];
+      hasBody = true;
+      continue;
+    }
+
+    body.push(line);
+  }
+  saveSection();
+
+  return sections.length > 0 ? sections : [{ title: "Overview", source }];
+}
+
 function MarkdownReport({ source }: { source: string }) {
+  const sections = getReportSections(source);
+  const [activeSection, setActiveSection] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const goToSection = (index: number) => {
+    const nextIndex = Math.max(0, Math.min(index, sections.length - 1));
+    setActiveSection(nextIndex);
+    trackRef.current?.scrollTo({
+      left: trackRef.current.clientWidth * nextIndex,
+      behavior: "smooth",
+    });
+  };
+
+  return (
+    <section aria-label="Report sections" className="overflow-hidden rounded-2xl border border-[#e2e8e2] bg-[#f8faf7]">
+      <div className="flex flex-col gap-3 border-b border-[#e6ebe5] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#829087]">Section {String(activeSection + 1).padStart(2, "0")} of {String(sections.length).padStart(2, "0")}</p>
+          <h3 className="mt-1 truncate text-sm font-semibold text-[#34453a]">{sections[activeSection]?.title}</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => goToSection(activeSection - 1)} disabled={activeSection === 0} aria-label="Previous report section" className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#dfe6de] bg-white text-[#526357] transition hover:bg-[#f4f7f3] disabled:cursor-not-allowed disabled:opacity-40">
+            <ChevronRight className="size-4 rotate-180" />
+          </button>
+          <div className="flex max-w-[min(48vw,420px)] items-center gap-1 overflow-x-auto py-1" aria-label="Choose report section">
+            {sections.map((section, index) => (
+              <button key={`${section.title}-${index}`} type="button" onClick={() => goToSection(index)} aria-current={activeSection === index ? "step" : undefined} aria-label={`Go to section ${index + 1}: ${section.title}`} className={`grid size-8 shrink-0 place-items-center rounded-lg text-[11px] font-semibold transition ${activeSection === index ? "bg-[#294436] text-white" : "bg-white text-[#68766b] ring-1 ring-[#e3e9e2] hover:bg-[#edf4ee]"}`}>
+                {index + 1}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => goToSection(activeSection + 1)} disabled={activeSection === sections.length - 1} aria-label="Next report section" className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#dfe6de] bg-white text-[#526357] transition hover:bg-[#f4f7f3] disabled:cursor-not-allowed disabled:opacity-40">
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      </div>
+      <div ref={trackRef} onScroll={(event) => {
+        const width = event.currentTarget.clientWidth;
+        if (width > 0) setActiveSection(Math.round(event.currentTarget.scrollLeft / width));
+      }} className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth">
+        {sections.map((section, index) => (
+          <article key={`${section.title}-${index}`} aria-label={`Section ${index + 1}: ${section.title}`} className="h-[min(66vh,680px)] min-h-[420px] w-full shrink-0 snap-start overflow-y-auto bg-white px-5 py-6 sm:px-9 sm:py-9">
+            <div className="mx-auto max-w-4xl space-y-5">
+              <div className="mb-6 flex items-center gap-3 border-b border-[#e9ede8] pb-4">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#edf4ee] text-xs font-bold text-[#52735b]">{String(index + 1).padStart(2, "0")}</span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829087]">Report section</p>
+                  <h2 className="mt-0.5 text-lg font-semibold tracking-[-0.025em] text-[#34453a]">{section.title}</h2>
+                </div>
+              </div>
+              <MarkdownBlocks source={section.source} />
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="flex items-center justify-between border-t border-[#e6ebe5] bg-white px-4 py-3 text-xs text-[#718076] sm:px-5">
+        <span>Swipe or scroll sideways to move through the report</span>
+        <span className="font-medium text-[#526357]">{activeSection + 1} / {sections.length}</span>
+      </div>
+    </section>
+  );
+}
+
+function MarkdownBlocks({ source }: { source: string }) {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const blocks: React.ReactNode[] = [];
   let index = 0;
@@ -1085,7 +1192,7 @@ function MarkdownReport({ source }: { source: string }) {
     blocks.push(<p key={`p-${index}`} className="text-sm leading-7 text-[#5c685f]">{inlineMarkdown(paragraph.join(" "), `p-${index}`)}</p>);
   }
 
-  return <article className="mx-auto max-w-4xl space-y-5 rounded-xl border border-[#e7ebe6] bg-white px-5 py-6 sm:px-9 sm:py-9">{blocks}</article>;
+  return <div className="space-y-5">{blocks}</div>;
 }
 
 function inlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {

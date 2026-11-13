@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Download, Table2, ScrollText, BarChart3,
-  Rows3, Columns3, ShieldCheck, Loader2, AlertCircle,
+  Rows3, ShieldCheck, Loader2, AlertCircle,
   FileJson, Copy, Check, Scale, RefreshCw, AlertTriangle,
   Code2, ArrowLeft, Sparkles, Filter, Eye, ChevronRight,
   FileText
@@ -41,6 +41,14 @@ interface LangSmithTrace {
   duration_ms?: number | null;
   status?: "pending" | "completed" | "error";
   tags?: string[];
+}
+
+interface CleaningAction {
+  action_type?: string;
+  column?: string | null;
+  confidence?: string;
+  explanation?: string;
+  assumption?: string | null;
 }
 
 // ── CSV Parser ──────────────────────────────────────────────────────────────
@@ -84,6 +92,7 @@ function StatCard({
 }) {
   return (
     <motion.div
+      data-results-theme
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.03, y: -2 }}
@@ -119,7 +128,7 @@ export function ResultsPanel({
   job: Job;
   onReset?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>("data");
+  const [activeTab, setActiveTab] = useState<Tab>("report");
   const [cleanedCsvData, setCleanedCsvData] = useState<ParsedCsv | null>(null);
   const [rawCsvData, setRawCsvData] = useState<ParsedCsv | null>(null);
   const [dataViewMode, setDataViewMode] = useState<"cleaned" | "raw">("cleaned");
@@ -139,8 +148,10 @@ export function ResultsPanel({
 
   useEffect(() => {
     if (job.status !== "COMPLETED" && job.status !== "FAILED") return;
-    setLoading(true);
-    setError(null);
+    const resetTimer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+    }, 0);
 
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
     const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "default_secret_key";
@@ -162,6 +173,7 @@ export function ResultsPanel({
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    return () => window.clearTimeout(resetTimer);
   }, [job.id, job.status]);
 
   useEffect(() => {
@@ -171,8 +183,10 @@ export function ResultsPanel({
     const terminal = job.status === "COMPLETED" || job.status === "FAILED";
     const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
     const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "default_secret_key";
-    setTraces([]);
-    setTraceError(null);
+    const resetTimer = window.setTimeout(() => {
+      setTraces([]);
+      setTraceError(null);
+    }, 0);
 
     async function refreshTraces() {
       let complete = false;
@@ -208,6 +222,7 @@ export function ResultsPanel({
     void refreshTraces();
     return () => {
       controller.abort();
+      clearTimeout(resetTimer);
       if (timer) clearTimeout(timer);
     };
   }, [job.id, job.status, activeTab, traceRefresh]);
@@ -250,7 +265,7 @@ export function ResultsPanel({
   const vr = insights?.validation_report;
   const gxSuite = vr?.great_expectations_suite;
   const planData = insights?.plan_data;
-  const planActions = Array.isArray(planData?.actions) ? planData.actions : [];
+  const planActions: CleaningAction[] = Array.isArray(planData?.actions) ? planData.actions : [];
   const cleaningCode = insights?.cleaning_code;
 
   const handleCopyGxSuite = () => {
@@ -279,31 +294,31 @@ export function ResultsPanel({
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode; badge?: string }[] = [
     {
+      id: "report",
+      label: "Run report",
+      icon: <FileText className="w-3.5 h-3.5" />,
+    },
+    {
       id: "data",
-      label: "Data Preview",
+      label: "Data preview",
       icon: <Table2 className="w-3.5 h-3.5" />,
       badge: cleanedCsvData ? `${cleanedCsvData.totalRows.toLocaleString()} rows` : undefined,
     },
     {
       id: "recipe",
-      label: "AI Recipe & Code",
-      icon: <Code2 className="w-3.5 h-3.5 text-[#00F0FF]" />,
+      label: "Transformations",
+      icon: <Code2 className="w-3.5 h-3.5" />,
       badge: planActions.length > 0 ? `${planActions.length} actions` : undefined,
     },
     {
       id: "insights",
-      label: "Quality & Validation",
+      label: "Quality checks",
       icon: <BarChart3 className="w-3.5 h-3.5" />,
     },
     {
       id: "expectations",
       label: `Great Expectations ${gxSuite ? `(${gxSuite.expectations?.length || 0})` : ""}`,
       icon: <FileJson className="w-3.5 h-3.5" />,
-    },
-    {
-      id: "report",
-      label: "Engineering Report (.md)",
-      icon: <FileText className="w-3.5 h-3.5 text-emerald-400" />,
     },
     {
       id: "logs",
@@ -338,14 +353,14 @@ export function ResultsPanel({
 
   const filteredActions = recipeFilter === "ALL"
     ? planActions
-    : planActions.filter((a: any) => a.confidence?.toLowerCase() === recipeFilter);
+    : planActions.filter((action) => action.confidence?.toLowerCase() === recipeFilter);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
       transition={{ duration: 0.5, delay: 0.2 }}
-      className="w-full max-w-5xl mt-8"
+      className="w-full max-w-6xl mt-3 text-[#26332b]"
     >
       {/* ── Top Navigation & Action Bar ──────────────────────────────────── */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-4">
@@ -355,7 +370,7 @@ export function ResultsPanel({
               onClick={onReset}
               whileHover={{ scale: 1.04, x: -2 }}
               whileTap={{ scale: 0.96 }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-xl border border-white/10 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg border border-[#e0e6df] bg-white px-3 py-2 text-xs font-medium text-[#58655b] transition-colors hover:bg-[#f3f6f2]"
               title="Return to upload screen to process another dataset"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-[#00F0FF]" />
@@ -419,25 +434,13 @@ export function ResultsPanel({
             </button>
           )}
 
-          {reportMarkdown && (
-            <button
-              onClick={handleDownloadReport}
-              disabled={isDownloadingReport}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-xl border border-white/10 transition-colors disabled:opacity-50"
-              title="Download generated Markdown quality audit report"
-            >
-              {isDownloadingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-emerald-400" />}
-              Export Report (.md)
-            </button>
-          )}
-
           <motion.button
             onClick={handleDownloadCsv}
             disabled={isDownloading || !canDownloadCandidate}
             whileHover={{ scale: 1.05, y: -2 }}
             whileTap={{ scale: 0.98 }}
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#00F0FF] hover:bg-[#00D0DD] disabled:opacity-60 text-black text-sm font-semibold rounded-full shadow-[0_0_20px_rgba(0,240,255,0.4)] animate-pulse-glow"
+            className="flex items-center gap-2 rounded-lg bg-[#294436] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#20392c] disabled:opacity-60"
           >
             {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {isDownloading ? "Downloading..." : passedVerification ? "Download Verified CSV" : "Download Review Candidate"}
@@ -513,7 +516,7 @@ export function ResultsPanel({
             </div>
           </div>
           <span className="text-xs font-mono px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full border border-emerald-500/30">
-            Zero Violations
+            Integrity verified
           </span>
         </motion.div>
       )}
@@ -664,15 +667,15 @@ export function ResultsPanel({
       )}
 
       {/* ── Main Tabbed Panel ────────────────────────────────────────────── */}
-      <div className="bg-[#020202] border border-white/[0.07] rounded-2xl overflow-hidden shadow-2xl">
+      <div className="overflow-hidden rounded-2xl border border-[#e2e7e1] bg-white shadow-[0_12px_40px_rgba(37,60,50,0.06)]">
         {/* Tab Bar */}
-        <div className="flex border-b border-white/[0.07] px-4 pt-3 gap-1 overflow-x-auto">
+        <div className="flex gap-1 overflow-x-auto border-b border-[#e9ede8] bg-[#fbfcfa] px-3 pt-2 sm:px-4">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative flex items-center gap-2 px-4 pb-3 text-xs font-semibold transition-colors whitespace-nowrap ${
-                activeTab === tab.id ? "text-white" : "text-gray-500 hover:text-gray-300"
+              className={`relative flex items-center gap-2 whitespace-nowrap px-3 py-3 text-xs font-medium transition-colors sm:px-4 ${
+                activeTab === tab.id ? "text-[#365642]" : "text-[#8a938b] hover:text-[#455348]"
               }`}
             >
               {tab.icon}
@@ -681,8 +684,8 @@ export function ResultsPanel({
                 <span
                   className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
                     activeTab === tab.id
-                      ? "bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/30"
-                      : "bg-white/5 text-gray-500"
+                      ? "rounded-full border border-[#d6e4d9] bg-[#edf4ee] text-[#52735b]"
+                      : "rounded-full bg-[#f0f2ef] text-[#879087]"
                   }`}
                 >
                   {tab.badge}
@@ -691,7 +694,7 @@ export function ResultsPanel({
               {activeTab === tab.id && (
                 <motion.div
                   layoutId="activeTabLine"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00F0FF] rounded-t-full"
+                  className="absolute bottom-0 left-3 right-3 h-0.5 rounded-t-full bg-[#557966] sm:left-4 sm:right-4"
                   initial={false}
                 />
               )}
@@ -771,7 +774,7 @@ export function ResultsPanel({
                         <>
                           {cleanedCsvData.totalRows > 200 && (
                             <p className="text-xs font-mono text-cyan-400/70">
-                              Previewing first 200 of {cleanedCsvData.totalRows.toLocaleString()} rows. Use "Download Cleaned CSV" for full output.
+                              Previewing first 200 of {cleanedCsvData.totalRows.toLocaleString()} rows. Use &quot;Download Cleaned CSV&quot; for full output.
                             </p>
                           )}
                           <ExcelTable data={cleanedCsvData.rows} headers={cleanedCsvData.headers} />
@@ -858,7 +861,7 @@ export function ResultsPanel({
 
                       {filteredActions.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
-                          {filteredActions.map((act: any, idx: number) => (
+                          {filteredActions.map((act, idx: number) => (
                             <div
                               key={idx}
                               className="bg-[#050505] border border-white/[0.07] hover:border-white/[0.15] rounded-xl p-3 text-xs space-y-1.5 transition-colors"
@@ -1033,49 +1036,50 @@ export function ResultsPanel({
 
                 {/* ── TAB 5: ENGINEERING REPORT (.MD) ───────────────────────── */}
                 {activeTab === "report" && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] flex-wrap gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-emerald-400" />
-                          <h4 className="text-sm font-semibold text-white">Engineering Quality & Audit Report (.md)</h4>
+                  <section className="space-y-5">
+                    <div className="flex flex-col gap-4 rounded-xl border border-[#dfe8df] bg-[#f4f8f3] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                      <div className="flex items-start gap-3">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-[#52735b] shadow-sm ring-1 ring-[#e2e9e1]">
+                          <FileText className="size-5" />
+                        </span>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6f8573]">Run report</p>
+                          <h2 className="mt-1 text-lg font-semibold tracking-[-0.03em] text-[#26332b]">Quality & transformation audit</h2>
+                          <p className="mt-1 text-xs text-[#7c877e]">{job.filename} · Read the results here or save a Markdown copy.</p>
                         </div>
-                        <p className="text-xs font-mono text-gray-400">
-                          Complete Markdown audit generated by ReporterAgent • Saved to outputs/report_{job.filename.replace(/\.csv$/, ".md")}
-                        </p>
                       </div>
-
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2 sm:justify-end">
                         <button
                           onClick={handleCopyReport}
                           disabled={!reportMarkdown}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-mono rounded-lg border border-white/10 transition-colors disabled:opacity-50"
+                          className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dce4dc] bg-white px-3 text-xs font-medium text-[#58665b] transition hover:bg-[#f9fbf8] disabled:opacity-40"
                         >
-                          {copiedReport ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                          {copiedReport ? "Copied" : "Copy Markdown"}
+                          {copiedReport ? <Check className="size-3.5 text-[#557966]" /> : <Copy className="size-3.5" />}
+                          {copiedReport ? "Copied" : "Copy report"}
                         </button>
                         <button
                           onClick={handleDownloadReport}
                           disabled={!reportMarkdown || isDownloadingReport}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-mono rounded-lg border border-emerald-500/30 transition-colors disabled:opacity-50"
+                          className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#294436] px-3.5 text-xs font-semibold text-white transition hover:bg-[#20392c] disabled:opacity-40"
                         >
-                          {isDownloadingReport ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                          Download .md
+                          {isDownloadingReport ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                          Download report
                         </button>
                       </div>
                     </div>
 
                     {reportMarkdown ? (
-                      <div className="bg-[#050505] border border-white/10 rounded-xl p-5 font-mono text-[11px] text-gray-300 leading-relaxed overflow-x-auto max-h-[600px] whitespace-pre-wrap select-text">
-                        {reportMarkdown}
-                      </div>
+                      <MarkdownReport source={reportMarkdown} />
                     ) : (
-                      <div className="flex flex-col items-center justify-center py-16 gap-3">
-                        <FileText className="w-8 h-8 text-gray-700" />
-                        <p className="text-sm font-mono text-gray-500">Generating report or report not available yet.</p>
+                      <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-[#dce3dc] bg-[#fbfcfa] px-6 text-center">
+                        <span className="grid size-11 place-items-center rounded-full bg-[#edf3ee] text-[#66806d]"><FileText className="size-5" /></span>
+                        <div>
+                          <p className="text-sm font-semibold text-[#435047]">Report is not available</p>
+                          <p className="mt-1 max-w-sm text-xs leading-5 text-[#8a948b]">The run may not have produced a report artifact. You can still review the quality checks and data preview in the tabs above.</p>
+                        </div>
                       </div>
                     )}
-                  </div>
+                  </section>
                 )}
 
                 {/* ── TAB 6: PIPELINE LOGS & LANGSMITH TRACES ───────────────── */}
@@ -1124,4 +1128,121 @@ export function ResultsPanel({
       </div>
     </motion.div>
   );
+}
+
+function MarkdownReport({ source }: { source: string }) {
+  const lines = source.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let index = 0;
+
+  const isTableDivider = (line: string) => /^\s*\|?\s*:?-{3,}/.test(line) && line.includes("|");
+  const isBlockStart = (line: string) =>
+    /^\s*(#{1,6}\s|```|---+$|[-*+]\s|\d+\.\s|>\s|\|)/.test(line);
+
+  while (index < lines.length) {
+    const line = lines[index].trim();
+    if (!line) {
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("```") ) {
+      const language = line.slice(3).trim();
+      const code: string[] = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith("```")) {
+        code.push(lines[index]);
+        index += 1;
+      }
+      index += 1;
+      blocks.push(
+        <div key={`code-${index}`} className="overflow-hidden rounded-xl border border-[#e3e8e2] bg-[#f7f9f6]">
+          {language && <div className="border-b border-[#e3e8e2] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7a887d]">{language}</div>}
+          <pre className="max-h-[420px] overflow-auto p-4 text-xs leading-6 text-[#47534a]"><code>{code.join("\n")}</code></pre>
+        </div>
+      );
+      continue;
+    }
+
+    if (/^---+$/.test(line)) {
+      blocks.push(<hr key={`rule-${index++}`} className="my-2 border-[#e8ece7]" />);
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const depth = heading[1].length;
+      const title = inlineMarkdown(heading[2], `heading-${index}`);
+      blocks.push(depth === 1
+        ? <h1 key={`h-${index}`} className="pb-3 text-2xl font-semibold tracking-[-0.045em] text-[#26332b]">{title}</h1>
+        : depth === 2
+          ? <h2 key={`h-${index}`} className="border-t border-[#e8ece7] pt-6 text-lg font-semibold tracking-[-0.025em] text-[#34453a]">{title}</h2>
+          : <h3 key={`h-${index}`} className="pt-2 text-sm font-semibold text-[#435348]">{title}</h3>);
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("|") && index + 1 < lines.length && isTableDivider(lines[index + 1])) {
+      const tableRows = [line];
+      index += 2;
+      while (index < lines.length && lines[index].trim().startsWith("|")) {
+        tableRows.push(lines[index].trim());
+        index += 1;
+      }
+      const cells = tableRows.map((row) => row.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim()));
+      blocks.push(
+        <div key={`table-${index}`} className="overflow-x-auto rounded-xl border border-[#e3e8e2]">
+          <table className="min-w-full divide-y divide-[#e8ece7] text-left text-xs">
+            <thead className="bg-[#f5f8f4] text-[10px] font-semibold uppercase tracking-[0.08em] text-[#77847a]">
+              <tr>{cells[0].map((cell, cellIndex) => <th key={cellIndex} className="px-3 py-2.5">{inlineMarkdown(cell, `th-${index}-${cellIndex}`)}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-[#edf0ec] bg-white text-[#566159]">
+              {cells.slice(1).map((row, rowIndex) => (
+                <tr key={rowIndex} className="align-top hover:bg-[#fafbf9]">
+                  {cells[0].map((_, cellIndex) => <td key={cellIndex} className="max-w-[420px] px-3 py-2.5 leading-5">{inlineMarkdown(row[cellIndex] || "", `td-${index}-${rowIndex}-${cellIndex}`)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    if (/^[-*+]\s/.test(line) || /^\d+\.\s/.test(line)) {
+      const ordered = /^\d+\.\s/.test(line);
+      const items: string[] = [];
+      while (index < lines.length && (/^\s*[-*+]\s/.test(lines[index]) || /^\s*\d+\.\s/.test(lines[index]))) {
+        items.push(lines[index].replace(/^\s*(?:[-*+]\s|\d+\.\s)/, ""));
+        index += 1;
+      }
+      const List = ordered ? "ol" : "ul";
+      blocks.push(<List key={`list-${index}`} className={`space-y-1.5 pl-5 text-sm leading-6 text-[#59665c] ${ordered ? "list-decimal" : "list-disc"}`}>{items.map((item, itemIndex) => <li key={itemIndex}>{inlineMarkdown(item, `li-${index}-${itemIndex}`)}</li>)}</List>);
+      continue;
+    }
+
+    if (line.startsWith(">")) {
+      blocks.push(<blockquote key={`quote-${index++}`} className="border-l-2 border-[#90a995] pl-4 text-sm italic leading-6 text-[#67766a]">{inlineMarkdown(line.replace(/^>\s?/, ""), `quote-${index}`)}</blockquote>);
+      continue;
+    }
+
+    const paragraph = [line];
+    index += 1;
+    while (index < lines.length && lines[index].trim() && !isBlockStart(lines[index].trim())) {
+      paragraph.push(lines[index].trim());
+      index += 1;
+    }
+    blocks.push(<p key={`p-${index}`} className="text-sm leading-7 text-[#5c685f]">{inlineMarkdown(paragraph.join(" "), `p-${index}`)}</p>);
+  }
+
+  return <article className="mx-auto max-w-4xl space-y-5 rounded-xl border border-[#e7ebe6] bg-white px-5 py-6 sm:px-9 sm:py-9">{blocks}</article>;
+}
+
+function inlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g).filter(Boolean).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={`${keyPrefix}-${index}`} className="font-semibold text-[#3c4b40]">{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={`${keyPrefix}-${index}`} className="rounded bg-[#edf3ee] px-1.5 py-0.5 text-[0.9em] text-[#4f7059]">{part.slice(1, -1)}</code>;
+    if (part.startsWith("*") && part.endsWith("*")) return <em key={`${keyPrefix}-${index}`}>{part.slice(1, -1)}</em>;
+    return <span key={`${keyPrefix}-${index}`}>{part}</span>;
+  });
 }

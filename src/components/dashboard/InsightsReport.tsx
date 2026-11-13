@@ -20,7 +20,21 @@ import {
   RefreshCw,
   AlertTriangle
 } from "lucide-react";
-import { InsightsData, downloadJsonBlob } from "@/lib/api";
+import { downloadJsonBlob, type InsightsData, type ValidationCheck } from "@/lib/api";
+
+type PlannedAction = {
+  action_type?: string;
+  column?: string | null;
+  confidence?: string;
+  explanation?: string;
+  assumption?: string | null;
+};
+
+type PlanData = {
+  actions?: PlannedAction[];
+  dataset_summary?: string;
+  global_assumptions?: string[];
+};
 
 export type { InsightsData };
 
@@ -43,17 +57,21 @@ export function InsightsReport({ data }: { data: InsightsData }) {
   }
 
   const vr = data.validation_report;
-  const plan = data.plan_data || {};
+  const plan = (data.plan_data || {}) as PlanData;
   const actions = plan.actions || [];
 
-  const dqBefore = vr.data_quality_score_before ?? 0;
-  const dqAfter = vr.data_quality_score_after ?? (vr.overall_passed ? 98.4 : 76.5);
-  const dqImprovement = vr.score_improvement ?? +(dqAfter - dqBefore).toFixed(1);
+  const dqBefore = vr.data_quality_score_before ?? undefined;
+  const dqAfter = vr.data_quality_score_after ?? undefined;
+  const dqImprovement = vr.score_improvement ?? (
+    dqBefore !== undefined && dqAfter !== undefined
+      ? +(dqAfter - dqBefore).toFixed(1)
+      : undefined
+  );
 
-  const compScore = vr.completeness_score ?? 100.0;
-  const valScore = vr.validity_score ?? 98.5;
-  const uniqScore = vr.uniqueness_score ?? 99.2;
-  const consScore = vr.consistency_score ?? 96.0;
+  const compScore = vr.completeness_score ?? undefined;
+  const valScore = vr.validity_score ?? undefined;
+  const uniqScore = vr.uniqueness_score ?? undefined;
+  const consScore = vr.consistency_score ?? undefined;
 
   const handleCopyGx = () => {
     if (!vr.great_expectations_suite) return;
@@ -76,7 +94,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
     ...(vr.format_checks || []),
     ...(vr.regression_checks || [])
   ];
-  const failedChecks = allChecks.filter((c: any) => !c.passed);
+  const failedChecks = allChecks.filter((check) => !check.passed);
 
   const categoryNames: Record<string, string> = {
     schema: "Schema & Datatypes",
@@ -88,15 +106,15 @@ export function InsightsReport({ data }: { data: InsightsData }) {
     regression: "Null Regressions"
   };
 
-  const categoryCounts = failedChecks.reduce((acc: Record<string, number>, c: any) => {
-    const cat = c.category || "other";
+  const categoryCounts = failedChecks.reduce<Record<string, number>>((acc, check) => {
+    const cat = check.category || "other";
     acc[cat] = (acc[cat] || 0) + 1;
     return acc;
   }, {});
 
   const filteredFailedChecks = selectedCategory === "ALL"
     ? failedChecks
-    : failedChecks.filter((c: any) => c.category === selectedCategory);
+    : failedChecks.filter((check) => check.category === selectedCategory);
 
   const displayedChecks = filteredFailedChecks.slice(0, visibleCheckCount);
   const displayedFlags = (vr.escalation_flags || []).slice(0, visibleFlagCount);
@@ -125,17 +143,17 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           {/* Hero Score Badge */}
           <div className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.08] px-4 py-2.5 rounded-xl">
             <div className="text-right">
-              <div className="text-[10px] font-mono text-gray-400 uppercase">Baseline vs Cleaned</div>
+              <div className="text-[10px] font-mono text-gray-400 uppercase">Baseline → prepared</div>
               <div className="text-sm font-mono text-gray-400">
-                <span className="text-gray-500 line-through mr-1.5">{dqBefore.toFixed(1)}</span>
+                <span className="text-gray-500 mr-1.5">{dqBefore !== undefined ? dqBefore.toFixed(1) : "—"}</span>
                 <ArrowRight className="inline w-3 h-3 text-gray-500 mx-1.5" />
-                <span className="text-2xl font-bold font-mono text-[#00F0FF] mr-1">{dqAfter.toFixed(1)}</span>
+                <span className="text-2xl font-bold font-mono text-[#00F0FF] mr-1">{dqAfter !== undefined ? dqAfter.toFixed(1) : "—"}</span>
                 <span className="text-xs text-gray-400">/ 100</span>
               </div>
             </div>
             <div className="bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 rounded-lg text-emerald-400 font-mono text-xs font-bold flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5" />
-              +{dqImprovement.toFixed(1)}%
+              {dqImprovement !== undefined ? `${dqImprovement > 0 ? "+" : ""}${dqImprovement.toFixed(1)} pts` : "Not reported"}
             </div>
           </div>
         </div>
@@ -146,22 +164,22 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           <div className="bg-black/60 border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-gray-300 font-medium">1. Completeness</span>
-              <span className="font-mono font-bold text-cyan-400">{compScore.toFixed(1)}%</span>
+              <span className="font-mono font-bold text-cyan-400">{compScore !== undefined ? `${compScore.toFixed(1)}%` : "—"}</span>
             </div>
             <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mb-2">
-              <div className="bg-cyan-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, compScore)}%` }} />
+              <div className="bg-cyan-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, compScore ?? 0)}%` }} />
             </div>
-            <span className="text-[10px] text-gray-500 leading-tight">Null reduction & controlled imputation balance</span>
+            <span className="text-[10px] text-gray-500 leading-tight">Missing-value coverage in the prepared data</span>
           </div>
 
           {/* Validity */}
           <div className="bg-black/60 border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-gray-300 font-medium">2. Validity</span>
-              <span className="font-mono font-bold text-emerald-400">{valScore.toFixed(1)}%</span>
+              <span className="font-mono font-bold text-emerald-400">{valScore !== undefined ? `${valScore.toFixed(1)}%` : "—"}</span>
             </div>
             <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mb-2">
-              <div className="bg-emerald-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, valScore)}%` }} />
+              <div className="bg-emerald-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, valScore ?? 0)}%` }} />
             </div>
             <span className="text-[10px] text-gray-500 leading-tight">Pandera contracts & boundary enforcement</span>
           </div>
@@ -170,10 +188,10 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           <div className="bg-black/60 border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-gray-300 font-medium">3. Uniqueness</span>
-              <span className="font-mono font-bold text-purple-400">{uniqScore.toFixed(1)}%</span>
+              <span className="font-mono font-bold text-purple-400">{uniqScore !== undefined ? `${uniqScore.toFixed(1)}%` : "—"}</span>
             </div>
             <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mb-2">
-              <div className="bg-purple-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, uniqScore)}%` }} />
+              <div className="bg-purple-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, uniqScore ?? 0)}%` }} />
             </div>
             <span className="text-[10px] text-gray-500 leading-tight">Exact deduplication & PK conflict resolution</span>
           </div>
@@ -182,10 +200,10 @@ export function InsightsReport({ data }: { data: InsightsData }) {
           <div className="bg-black/60 border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="text-gray-300 font-medium">4. Consistency</span>
-              <span className="font-mono font-bold text-amber-400">{consScore.toFixed(1)}%</span>
+              <span className="font-mono font-bold text-amber-400">{consScore !== undefined ? `${consScore.toFixed(1)}%` : "—"}</span>
             </div>
             <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mb-2">
-              <div className="bg-amber-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, consScore)}%` }} />
+              <div className="bg-amber-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, consScore ?? 0)}%` }} />
             </div>
             <span className="text-[10px] text-gray-500 leading-tight">Temporal order & arithmetic invariant checks</span>
           </div>
@@ -215,7 +233,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
             )}
             {data.retry_count > 0 && (
               <span className="text-[11px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                <RefreshCw className="w-3 h-3" /> Circuit Breaker Self-Healed ({data.retry_count} retries)
+                <RefreshCw className="w-3 h-3" /> Retry attempts: {data.retry_count}
               </span>
             )}
           </div>
@@ -388,11 +406,11 @@ export function InsightsReport({ data }: { data: InsightsData }) {
             <h3 className="text-sm font-semibold">2. Autonomous Cleaning Plan & Code Actions</h3>
           </div>
           <span className="text-[10px] font-mono bg-purple-500/10 text-purple-300 px-2 py-0.5 rounded border border-purple-500/20">
-            {actions.length} Executed Transforms
+            {actions.length} Planned Actions
           </span>
         </div>
         <div className="space-y-2">
-          {actions.map((act: any, i: number) => (
+          {actions.map((act, i: number) => (
             <div key={i} className="flex flex-col gap-1 text-xs p-2.5 bg-white/[0.02] rounded-lg border border-white/[0.03]">
               <div className="flex items-center justify-between">
                 <span className="text-gray-200 font-semibold">
@@ -446,7 +464,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.03]">
-              {vr.stats_diff.map((diff: any, i: number) => (
+              {vr.stats_diff.map((diff, i: number) => (
                 <tr key={i} className="text-gray-300">
                   <td className="py-2.5 font-mono text-[11px] text-cyan-300">{diff.column}</td>
                   <td className="py-2.5 text-center font-mono">
@@ -507,7 +525,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
                 </button>
               )}
             </div>
-            {displayedFlags.map((flag: any, i: number) => (
+            {displayedFlags.map((flag, i: number) => (
               <div
                 key={i}
                 className={`flex gap-3 text-xs p-3 rounded-lg border ${
@@ -574,7 +592,7 @@ export function InsightsReport({ data }: { data: InsightsData }) {
 
             {/* Cards List in 20 Batches */}
             <div className="space-y-2">
-              {displayedChecks.map((check: any, i: number) => (
+              {displayedChecks.map((check: ValidationCheck, i: number) => (
                 <div
                   key={i}
                   className="flex gap-3 text-xs p-3 rounded-lg border bg-red-500/5 border-red-500/20 text-red-200"

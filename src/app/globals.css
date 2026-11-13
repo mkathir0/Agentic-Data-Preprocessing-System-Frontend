@@ -48,6 +48,116 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* The upload workspace uses a light palette; keep the legacy result widgets in sync. */
+[data-results-theme] {
+  color-scheme: light;
+  color: #26332b;
+}
+
+[data-results-theme] [class*="bg-black"],
+[data-results-theme] [class*="bg-[#020202]"],
+[data-results-theme] [class*="bg-[#050505]"],
+[data-results-theme] [class*="bg-[#0c0c0c]"],
+[data-results-theme] [class*="bg-[#0d0d0d]"],
+[data-results-theme] [class*="bg-[#001a1a]"] {
+  background-color: #fff !important;
+}
+
+[data-results-theme] [class*="bg-white/"] {
+  background-color: #f5f7f4 !important;
+}
+
+[data-results-theme] [class*="bg-[#00F0FF]"],
+[data-results-theme] [class*="bg-[#00D0DD]"],
+[data-results-theme] [class*="bg-cyan-"] {
+  background-color: #557966 !important;
+}
+
+[data-results-theme] [class~="bg-[#00F0FF]/5"],
+[data-results-theme] [class~="bg-[#00F0FF]/10"],
+[data-results-theme] [class~="bg-[#00F0FF]/20"],
+[data-results-theme] [class~="bg-[#00F0FF]/30"],
+[data-results-theme] [class~="bg-cyan-500/10"],
+[data-results-theme] [class~="bg-purple-500/10"],
+[data-results-theme] [class~="bg-purple-400/10"],
+[data-results-theme] [class~="bg-blue-500/10"] {
+  background-color: #edf4ee !important;
+}
+
+[data-results-theme] [class*="bg-purple-"] {
+  background-color: #edf4ee !important;
+}
+
+[data-results-theme] [class*="from-blue-950"],
+[data-results-theme] [class*="from-[#020b14]"] {
+  background-image: linear-gradient(110deg, #f4f8f3, #edf3ee) !important;
+}
+
+[data-results-theme] [class*="text-white"],
+[data-results-theme] [class*="text-gray-100"],
+[data-results-theme] [class*="text-gray-200"] {
+  color: #303d33 !important;
+}
+
+[data-results-theme] [class*="text-gray-300"],
+[data-results-theme] [class*="text-gray-400"] {
+  color: #5f6d63 !important;
+}
+
+[data-results-theme] [class*="text-gray-500"],
+[data-results-theme] [class*="text-gray-600"],
+[data-results-theme] [class*="text-gray-700"] {
+  color: #7b877d !important;
+}
+
+[data-results-theme] [class*="text-[#00F0FF]"],
+[data-results-theme] [class*="text-[#00D0DD]"],
+[data-results-theme] [class*="text-cyan-"],
+[data-results-theme] [class*="text-blue-"],
+[data-results-theme] [class*="text-purple-"] {
+  color: #557966 !important;
+}
+
+[data-results-theme] [class*="text-amber-100"],
+[data-results-theme] [class*="text-amber-200"],
+[data-results-theme] [class*="text-amber-300"],
+[data-results-theme] [class*="text-red-100"],
+[data-results-theme] [class*="text-red-200"],
+[data-results-theme] [class*="text-red-300"] {
+  color: #8c6040 !important;
+}
+
+[data-results-theme] [class*="text-emerald-"],
+[data-results-theme] [class*="text-green-"] {
+  color: #4f7258 !important;
+}
+
+[data-results-theme] [class*="border-white/"],
+[data-results-theme] [class*="border-white["],
+[data-results-theme] [class*="border-[#00F0FF]"],
+[data-results-theme] [class*="border-cyan-"] {
+  border-color: #e1e8e1 !important;
+}
+
+[data-results-theme] [class*="border-purple-"] {
+  border-color: #dce7dd !important;
+}
+
+[data-results-theme] button[class*="bg-[#294436]"],
+[data-results-theme] button[class*="bg-[#00F0FF]"] {
+  color: #fff !important;
+}
+
+[data-results-theme] .animate-pulse-glow {
+  animation: none;
+  box-shadow: none;
+}
+
+[data-results-theme] :not(pre):not(code).font-mono {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

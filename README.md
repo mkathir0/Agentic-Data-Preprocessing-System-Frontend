@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agentic Data Preprocessing System — Frontend
 
-## Getting Started
+A modern, production-grade Next.js & React dashboard for the **Agentic Data Preprocessing System**. Built to visualize the 5-stage LangGraph preprocessing loop, lazy Pandera contract validation, 4-dimensional data quality scores, and Great Expectations suite exports in real-time.
 
-First, run the development server:
+---
 
+## 🌟 Key Features
+
+- **Executive 4-Dimensional Data Quality Scorecard**:
+  - Baseline vs. Cleaned Quality Score tracking (e.g. `82.6 → 98.4`, `+15.8%`).
+  - Four dedicated mathematical dimensions:
+    - **Completeness**: Null reduction and conservative imputation auditing.
+    - **Validity**: Pandera lazy schema contracts and domain boundary rules.
+    - **Uniqueness**: Multi-column exact deduplication and primary key conflict isolation.
+    - **Consistency**: Temporal precedence (`end_time >= start_time`) and arithmetic invariants (`qty * price = total`).
+- **Pandera Lazy Contract Verification**:
+  - Real-time schema verification status (`PASSED` vs `CIRCUIT BREAKER SELF-HEALED`).
+  - Detailed breakdown of failure cases and constraint violations fed back into the self-healing loop.
+- **Data Integrity & Key Conflict Detection**:
+  - Exact duplicates dropped.
+  - Near-duplicate clustering via fuzzy matching (Levenshtein token set ratio $\ge 85\%$).
+  - Primary key collisions (identical IDs with differing record data) escalated to human review.
+- **Great Expectations (GX) Interoperability Suite**:
+  - Automatic Pandera-to-GX schema translation.
+  - Live inspection, 1-click JSON copying, and direct suite download for CI/CD or dbt data pipelines.
+- **5-Stage Pipeline Visualizer**:
+  - Live animated visual state for the LangGraph stages: `Profile` → `Plan` → `Code` → `Execute` → `Validate`.
+- **Interactive Cleaned CSV Preview**:
+  - High-performance, Excel-style spreadsheet preview supporting virtualized scroll and direct CSV download.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework**: Next.js 16 (App Router, Turbopack)
+- **UI Library**: React 19, Tailwind CSS 4, Lucide React
+- **Animations**: Framer Motion
+- **API Client**: REST with `X-API-Key` authentication
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+- Node.js `v20+` or `v25+`
+- The backend FastAPI service running on `http://localhost:8000` (from the [Backend Repository](https://github.com/mkathir0/Agentic-Data-Preprocessing-System.))
+
+### 2. Installation
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/mkathir0/Agentic-Data-Preprocessing-System-Frontend.git
+cd Agentic-Data-Preprocessing-System-Frontend
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Environment Configuration
+Copy `.env.example` to `.env.local`:
+```bash
+cp .env.example .env.local
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Ensure `.env.local` points to your backend instance:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_KEY=default_secret_key
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Run the Development Server
+```bash
+npm run dev
+```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🔗 Architecture & Separation of Concerns
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Service | Directory / Repo | Port | Description |
+|---|---|---|---|
+| **Backend** | `Agentic-Data-Preprocessing-System.` | `8000` | FastAPI, LangGraph 5-stage loop, Pandera validation engine, SQLite/PostgreSQL |
+| **Frontend** | `Agentic-Data-Preprocessing-System-Frontend` | `3000` | Next.js 16, interactive pipeline visualizer, 4D scorecard, GX suite exporter |
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📦 Production Build
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+npm run start
+```

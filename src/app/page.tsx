@@ -186,8 +186,8 @@ export default function Home() {
                 </motion.div>
               )}
 
-              {/* Results section — only when COMPLETED */}
-              {isCompleted && activeJob && (
+              {/* Results section — when COMPLETED or when FAILED with finished run */}
+              {(isCompleted || (isFailed && activeJob?.progress === 100)) && activeJob && (
                 <ResultsPanel job={activeJob} />
               )}
             </motion.div>

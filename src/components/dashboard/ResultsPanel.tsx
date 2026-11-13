@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, Download, Table2, ScrollText, BarChart3,
@@ -1038,115 +1038,118 @@ function MarkdownReport({ source, jobId, validationReport, needsHumanReview, pro
   productionApproved: boolean;
 }) {
   const sections = getReportSections(source);
-  const [activeSection, setActiveSection] = useState(0);
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  const goToSection = (index: number) => {
-    const nextIndex = Math.max(0, Math.min(index, sections.length - 1));
-    setActiveSection(nextIndex);
-    trackRef.current?.scrollTo({
-      left: trackRef.current.clientWidth * nextIndex,
-      behavior: "smooth",
-    });
-  };
+  const failedChecks = validationReport
+    ? [
+        ...validationReport.schema_checks,
+        ...validationReport.range_checks,
+        ...validationReport.cross_field_checks,
+        ...validationReport.distributional_checks,
+        ...validationReport.duplicate_checks,
+        ...validationReport.format_checks,
+        ...validationReport.regression_checks,
+      ].filter((check) => !check.passed)
+    : [];
+  const attentionItems = [
+    ...failedChecks.map((check) => ({ title: check.name, detail: check.details })),
+    ...(validationReport?.escalation_flags ?? []).map((flag) => ({
+      title: flag.column ? `${flag.column} needs review` : `${flag.severity} priority review`,
+      detail: flag.reason,
+    })),
+    ...(validationReport?.review_reasons ?? []).map((reason) => ({ title: "Review reason", detail: reason })),
+  ].filter((item, index, all) => all.findIndex((candidate) => candidate.detail === item.detail) === index);
+  const visibleAttentionItems = attentionItems.slice(0, 3);
 
   return (
-    <div className="space-y-4">
-      <section aria-labelledby="report-overview-title" className="overflow-hidden rounded-2xl border border-[#e2e8e2] bg-white shadow-sm">
-        <div className={`border-b px-5 py-4 ${productionApproved ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-5">
+      <section aria-label="Run decision and key metrics" className="overflow-hidden rounded-2xl border border-[#e2e8e2] bg-white shadow-sm">
+        <div className={`flex flex-wrap items-center justify-between gap-4 border-b px-5 py-4 ${productionApproved ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+          <div className="flex items-center gap-3">
+            <span className={`grid size-10 place-items-center rounded-xl bg-white ${productionApproved ? "text-emerald-800" : "text-amber-800"}`}>
+              {productionApproved ? <ShieldCheck className="size-5" /> : <AlertTriangle className="size-5" />}
+            </span>
             <div>
-              <p className={`text-[10px] font-bold uppercase tracking-[0.13em] ${productionApproved ? "text-emerald-800" : "text-amber-800"}`}>
-                {productionApproved ? "Validation outcome" : "Action required"}
-              </p>
-              <h3 id="report-overview-title" className={`mt-1 text-lg font-semibold tracking-[-0.025em] ${productionApproved ? "text-emerald-950" : "text-amber-950"}`}>
+              <h3 className={`text-base font-semibold ${productionApproved ? "text-emerald-950" : "text-amber-950"}`}>
                 {productionApproved ? "Approved for production" : needsHumanReview ? "Human review required" : "Production approval unavailable"}
               </h3>
-              <p className={`mt-1 max-w-2xl text-sm leading-5 ${productionApproved ? "text-emerald-900" : "text-amber-900"}`}>
-                {productionApproved
-                  ? "Integrity and validation checks passed. The cleaned output is ready for use."
-                  : needsHumanReview
-                    ? validationReport?.integrity_passed
-                      ? "File integrity passed, but validation or review requirements are unresolved. Do not use this output in production yet."
-                      : "Validation did not clear this output. Review the flagged evidence before using it."
-                    : "Validation evidence is incomplete, so production use has not been approved."}
+              <p className={`mt-0.5 text-xs ${productionApproved ? "text-emerald-900" : "text-amber-900"}`}>
+                {productionApproved ? "All required validation checks passed." : "Do not use this output in production until the review is resolved."}
               </p>
             </div>
-            <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${productionApproved ? "bg-white text-emerald-900 ring-1 ring-emerald-300" : "bg-white text-amber-950 ring-1 ring-amber-300"}`}>
-              {productionApproved ? "APPROVED" : "NOT APPROVED"}
-            </span>
           </div>
+          <span className={`rounded-full bg-white px-3 py-1.5 text-[11px] font-bold tracking-wide ring-1 ${productionApproved ? "text-emerald-900 ring-emerald-300" : "text-amber-950 ring-amber-300"}`}>
+            {productionApproved ? "APPROVED" : "NOT APPROVED"}
+          </span>
         </div>
-        <div className="grid divide-y divide-[#edf0ec] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-          <div className="p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Validation checks</p>
-            <p className="mt-1 text-lg font-semibold text-[#34453a]">{validationReport ? `${validationReport.total_passed}/${validationReport.total_checks}` : "—"}</p>
-            <p className="text-xs text-[#758177]">passed</p>
-          </div>
-          <div className="p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Quality score</p>
-            <p className="mt-1 text-lg font-semibold text-[#34453a]">{validationReport?.data_quality_score_after !== undefined ? `${validationReport.data_quality_score_after.toFixed(1)}/100` : "—"}</p>
-            <p className="text-xs text-[#758177]">{validationReport?.score_improvement !== undefined ? `${validationReport.score_improvement >= 0 ? "+" : ""}${validationReport.score_improvement.toFixed(1)} pts change` : "change not reported"}</p>
-          </div>
-          <div className="p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Integrity</p>
-            <p className={`mt-1 text-lg font-semibold ${validationReport?.integrity_passed === true ? "text-emerald-800" : validationReport?.integrity_passed === false ? "text-red-800" : "text-amber-800"}`}>{validationReport?.integrity_passed === true ? "Passed" : validationReport?.integrity_passed === false ? "Failed" : "Not confirmed"}</p>
-            <p className="text-xs text-[#758177]">file and output checks</p>
-          </div>
-          <div className="p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">Job ID</p>
-            <p className="mt-1 break-all font-mono text-xs font-medium text-[#34453a]">{jobId}</p>
-            <p className="text-xs text-[#758177]">run reference</p>
-          </div>
+
+        <div className="grid gap-px bg-[#edf0ec] sm:grid-cols-2 xl:grid-cols-4">
+          <ReportMetric label="Checks passed" value={validationReport ? `${validationReport.total_passed} / ${validationReport.total_checks}` : "—"} detail={validationReport ? `${validationReport.total_failed} failed` : "No validation data"} />
+          <ReportMetric label="Quality score" value={validationReport?.data_quality_score_after !== undefined ? `${validationReport.data_quality_score_after.toFixed(1)} / 100` : "—"} detail={validationReport?.score_improvement !== undefined ? `${validationReport.score_improvement >= 0 ? "+" : ""}${validationReport.score_improvement.toFixed(1)} points` : "Change not reported"} />
+          <ReportMetric label="Integrity" value={validationReport?.integrity_passed === true ? "Passed" : validationReport?.integrity_passed === false ? "Failed" : "Unknown"} detail="Output integrity check" status={validationReport?.integrity_passed === true ? "good" : validationReport?.integrity_passed === false ? "bad" : "neutral"} />
+          <ReportMetric label="Job ID" value={jobId} detail="Run reference" compact />
         </div>
       </section>
 
-      <section aria-label="Report sections" className="overflow-hidden rounded-2xl border border-[#e2e8e2] bg-[#f8faf7]">
-      <div className="flex flex-col gap-3 border-b border-[#e6ebe5] bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#829087]">Section {String(activeSection + 1).padStart(2, "0")} of {String(sections.length).padStart(2, "0")}</p>
-          <h3 className="mt-1 truncate text-sm font-semibold text-[#34453a]">{sections[activeSection]?.title}</h3>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => goToSection(activeSection - 1)} disabled={activeSection === 0} aria-label="Previous report section" className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#dfe6de] bg-white text-[#526357] transition hover:bg-[#f4f7f3] disabled:cursor-not-allowed disabled:opacity-40">
-            <ChevronRight className="size-4 rotate-180" />
-          </button>
-          <div className="flex max-w-[min(48vw,420px)] items-center gap-1 overflow-x-auto py-1" aria-label="Choose report section">
-            {sections.map((section, index) => (
-              <button key={`${section.title}-${index}`} type="button" onClick={() => goToSection(index)} aria-current={activeSection === index ? "step" : undefined} aria-label={`Go to section ${index + 1}: ${section.title}`} className={`grid size-8 shrink-0 place-items-center rounded-lg text-[11px] font-semibold transition ${activeSection === index ? "bg-[#294436] text-white" : "bg-white text-[#68766b] ring-1 ring-[#e3e9e2] hover:bg-[#edf4ee]"}`}>
-                {index + 1}
-              </button>
-            ))}
+      {!productionApproved && visibleAttentionItems.length > 0 && (
+        <section aria-labelledby="attention-title" className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 id="attention-title" className="text-sm font-semibold text-[#34453a]">What needs attention</h3>
+              <p className="mt-0.5 text-xs text-[#758177]">The highest-priority findings from this run.</p>
+            </div>
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-900 ring-1 ring-amber-200">{attentionItems.length} findings</span>
           </div>
-          <button type="button" onClick={() => goToSection(activeSection + 1)} disabled={activeSection === sections.length - 1} aria-label="Next report section" className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#dfe6de] bg-white text-[#526357] transition hover:bg-[#f4f7f3] disabled:cursor-not-allowed disabled:opacity-40">
-            <ChevronRight className="size-4" />
-          </button>
-        </div>
-      </div>
-      <div ref={trackRef} onScroll={(event) => {
-        const width = event.currentTarget.clientWidth;
-        if (width > 0) setActiveSection(Math.round(event.currentTarget.scrollLeft / width));
-      }} className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth">
-        {sections.map((section, index) => (
-          <article key={`${section.title}-${index}`} aria-label={`Section ${index + 1}: ${section.title}`} className="h-[min(66vh,680px)] min-h-[420px] w-full shrink-0 snap-start overflow-y-auto bg-white px-5 py-6 sm:px-9 sm:py-9">
-            <div className="mx-auto max-w-4xl space-y-5">
-              <div className="mb-6 flex items-center gap-3 border-b border-[#e9ede8] pb-4">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#edf4ee] text-xs font-bold text-[#52735b]">{String(index + 1).padStart(2, "0")}</span>
+          <ul className="divide-y divide-[#edf0ec]">
+            {visibleAttentionItems.map((item, index) => (
+              <li key={`${item.title}-${index}`} className="flex gap-3 py-3 first:pt-1 last:pb-0">
+                <span className="grid size-6 shrink-0 place-items-center rounded-md bg-amber-50 text-[10px] font-bold text-amber-900">{index + 1}</span>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#829087]">Report section</p>
-                  <h2 className="mt-0.5 text-lg font-semibold tracking-[-0.025em] text-[#34453a]">{section.title}</h2>
+                  <p className="text-xs font-semibold text-[#3c4b40]">{item.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-[#66736a]">{item.detail || "See validation details for evidence."}</p>
                 </div>
-              </div>
+              </li>
+            ))}
+          </ul>
+          {attentionItems.length > visibleAttentionItems.length && <p className="mt-3 text-xs text-[#758177]">+ {attentionItems.length - visibleAttentionItems.length} more findings in Quality checks.</p>}
+        </section>
+      )}
+
+      <section aria-labelledby="report-details-title" className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2 px-1">
+          <div>
+            <h3 id="report-details-title" className="text-base font-semibold text-[#34453a]">Report details</h3>
+            <p className="mt-0.5 text-xs text-[#758177]">Open a section to inspect its evidence and notes.</p>
+          </div>
+          <span className="text-xs font-medium text-[#758177]">{sections.length} sections</span>
+        </div>
+        {sections.map((section, index) => (
+          <details key={`${section.title}-${index}`} open={index === 0} className="group overflow-hidden rounded-xl border border-[#e2e8e2] bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 marker:hidden hover:bg-[#fafbf9] [&::-webkit-details-marker]:hidden">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#edf4ee] text-[10px] font-bold text-[#52735b]">{String(index + 1).padStart(2, "0")}</span>
+              <span className="min-w-0 flex-1 text-sm font-semibold text-[#3c4b40]">{section.title}</span>
+              <ChevronRight className="size-4 shrink-0 text-[#758177] transition-transform group-open:rotate-90" />
+            </summary>
+            <div className="border-t border-[#edf0ec] px-4 py-5 sm:px-6">
               <MarkdownBlocks source={section.source} />
             </div>
-          </article>
+          </details>
         ))}
-      </div>
-      <div className="flex items-center justify-between border-t border-[#e6ebe5] bg-white px-4 py-3 text-xs text-[#718076] sm:px-5">
-        <span>Swipe or scroll sideways to move through the report</span>
-        <span className="font-medium text-[#526357]">{activeSection + 1} / {sections.length}</span>
-      </div>
       </section>
+    </div>
+  );
+}
+
+function ReportMetric({ label, value, detail, status = "neutral", compact = false }: {
+  label: string;
+  value: string;
+  detail: string;
+  status?: "good" | "bad" | "neutral";
+  compact?: boolean;
+}) {
+  return (
+    <div className="min-w-0 bg-white p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#829087]">{label}</p>
+      <p className={`mt-1 font-semibold ${compact ? "break-all font-mono text-xs leading-5 text-[#34453a]" : `text-lg ${status === "good" ? "text-emerald-800" : status === "bad" ? "text-red-800" : "text-[#34453a]"}`}`}>{value}</p>
+      <p className="mt-0.5 text-xs text-[#758177]">{detail}</p>
     </div>
   );
 }

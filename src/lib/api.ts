@@ -15,6 +15,7 @@ export interface Job {
   cleaning_plan: any | null;
   retry_count?: number;
   user_instructions?: string;
+  cleaned_filepath?: string | null;
 }
 
 export interface ValidationCheck {
@@ -72,6 +73,9 @@ export interface GreatExpectationsSuite {
 }
 
 export interface ValidationReport {
+  integrity_passed?: boolean;
+  review_required?: boolean;
+  review_reasons?: string[];
   schema_checks: ValidationCheck[];
   range_checks: ValidationCheck[];
   cross_field_checks: ValidationCheck[];

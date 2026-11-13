@@ -3,8 +3,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Nexus Data Engineer",
-  description: "Autonomous Data Engineering System",
+  title: "Nexus — Data Quality Workspace",
+  description: "Evidence-backed dataset cleanup, integrity checks, and clear human review.",
 };
 
 export default function RootLayout({
@@ -18,7 +18,7 @@ export default function RootLayout({
       className="h-full antialiased dark"
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-[#000000] text-gray-100 font-sans selection:bg-[#00F0FF]/30 selection:text-white">
+      <body className="min-h-full flex flex-col bg-[#080c12] text-gray-100 font-sans selection:bg-cyan-300/25 selection:text-white">
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

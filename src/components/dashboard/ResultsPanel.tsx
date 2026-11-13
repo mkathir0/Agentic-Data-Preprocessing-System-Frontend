@@ -38,7 +38,8 @@ interface LangSmithTrace {
   level: "info" | "warning" | "error";
   message: string;
   timestamp: string;
-  duration_ms?: number;
+  duration_ms?: number | null;
+  status?: "pending" | "completed" | "error";
   tags?: string[];
 }
 
@@ -105,7 +106,7 @@ function tracesToLogs(traces: LangSmithTrace[]): PipelineLog[] {
     level: t.level,
     agent: t.agent,
     message: t.message,
-    duration: t.duration_ms ? `${(t.duration_ms / 1000).toFixed(2)}s` : undefined,
+    duration: t.duration_ms != null ? `${(t.duration_ms / 1000).toFixed(2)}s` : undefined,
     tags: t.tags ?? [],
   }));
 }
@@ -124,6 +125,8 @@ export function ResultsPanel({
   const [dataViewMode, setDataViewMode] = useState<"cleaned" | "raw">("cleaned");
   const [insights, setInsights] = useState<InsightsData | null>(null);
   const [traces, setTraces] = useState<LangSmithTrace[]>([]);
+  const [traceError, setTraceError] = useState<string | null>(null);
+  const [traceRefresh, setTraceRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -149,21 +152,65 @@ export function ResultsPanel({
       fetch(`${API_BASE}/jobs/${job.id}/insights`, { headers })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
-      fetch(`${API_BASE}/jobs/${job.id}/langsmith-traces`, { headers })
-        .then((r) => (r.ok ? r.json() : []))
-        .catch(() => []),
       fetchReport(job.id).catch(() => null),
     ])
-      .then(([cleanedCsv, rawCsv, insightsData, traceData, reportText]) => {
+      .then(([cleanedCsv, rawCsv, insightsData, reportText]) => {
         if (cleanedCsv) setCleanedCsvData(parseCsvText(cleanedCsv));
         if (rawCsv) setRawCsvData(parseCsvText(rawCsv));
         setInsights(insightsData);
-        setTraces(traceData || []);
         if (reportText) setReportMarkdown(reportText);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [job.id, job.status]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
+    const terminal = job.status === "COMPLETED" || job.status === "FAILED";
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "default_secret_key";
+    setTraces([]);
+    setTraceError(null);
+
+    async function refreshTraces() {
+      let complete = false;
+      try {
+        const response = await fetch(`${API_BASE}/jobs/${job.id}/langsmith-traces`, {
+          headers: { "X-API-Key": API_KEY },
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(body?.detail || `Trace request failed (${response.status})`);
+        }
+        const data: LangSmithTrace[] = await response.json();
+        if (!controller.signal.aborted) {
+          setTraces(data);
+          setTraceError(null);
+          complete = data.length > 0 && data.every((trace) => trace.status !== "pending");
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setTraceError(error instanceof Error ? error.message : "Could not load LangSmith traces.");
+        }
+      } finally {
+        attempts += 1;
+        // Allow for cloud ingestion delay after completion. Keep the open
+        // trace tab current; bound background retries for historical jobs.
+        if (!controller.signal.aborted && (!terminal || activeTab === "logs" || (!complete && attempts < 12))) {
+          timer = setTimeout(refreshTraces, 5000);
+        }
+      }
+    }
+    void refreshTraces();
+    return () => {
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
+  }, [job.id, job.status, activeTab, traceRefresh]);
 
   const logs: PipelineLog[] = traces.length > 0 ? tracesToLogs(traces) : [];
 
@@ -265,9 +312,11 @@ export function ResultsPanel({
     },
   ];
 
-  const isFailed = job.status === "FAILED";
+  const passedVerification = job.status === "COMPLETED" && vr?.overall_passed === true && vr?.integrity_passed === true;
+  const canDownloadCandidate = Boolean(job.cleaned_filepath) && vr?.integrity_passed === true;
+  const isFailed = job.status === "FAILED" || !passedVerification;
   const isReviewFlagged = job.current_step === "REVIEW_FLAGGED" || ((vr?.key_conflict_count ?? 0) > 0);
-  const hasReviewItems = isReviewFlagged || ((vr?.escalation_flags?.length ?? 0) > 0) || (isFailed && cleanedCsvData !== null);
+  const hasReviewItems = vr?.integrity_passed === true && (isReviewFlagged || ((vr?.escalation_flags?.length ?? 0) > 0) || (isFailed && cleanedCsvData !== null));
 
   const rawRowsCount = rawCsvData?.totalRows ?? insights?.profiler_data?.num_rows ?? 0;
   const cleanedRowsCount = cleanedCsvData?.totalRows ?? rawRowsCount;
@@ -384,14 +433,14 @@ export function ResultsPanel({
 
           <motion.button
             onClick={handleDownloadCsv}
-            disabled={isDownloading}
+            disabled={isDownloading || !canDownloadCandidate}
             whileHover={{ scale: 1.05, y: -2 }}
             whileTap={{ scale: 0.98 }}
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#00F0FF] hover:bg-[#00D0DD] disabled:opacity-60 text-black text-sm font-semibold rounded-full shadow-[0_0_20px_rgba(0,240,255,0.4)] animate-pulse-glow"
           >
             {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {isDownloading ? "Downloading..." : "Download Cleaned CSV"}
+            {isDownloading ? "Downloading..." : passedVerification ? "Download Verified CSV" : "Download Review Candidate"}
           </motion.button>
         </div>
       </div>
@@ -409,7 +458,7 @@ export function ResultsPanel({
               Autonomous Safety Protocol Active: Human Review Recommended
             </h4>
             <p className="text-xs text-amber-300/80 leading-relaxed font-sans">
-              The AI engine executed all whitespace trimming, numerical normalizations, date parsing, and deduplication.
+              This run has unresolved review items. Only supported, verified transformations may be applied; ambiguous values are preserved.
               {vr?.key_conflict_count && vr.key_conflict_count > 0 ? (
                 <>
                   {" "}However, the validation engine detected{" "}
@@ -420,11 +469,11 @@ export function ResultsPanel({
                 <>
                   {" "}The validation engine flagged{" "}
                   <strong className="text-amber-100">{vr.escalation_flags.length} domain / cross-field anomalies</strong> for verification.
-                  Cleaned dataset and transformation scripts are fully generated and ready below.
+                  Inspect the audit before using the candidate output. It is not approved for production.
                 </>
               ) : (
                 <>
-                  {" "}Minor schema boundary constraints were flagged for verification.
+                  {" "}Validation has not established that this output is safe to use. Review the report or run the dataset again.
                 </>
               )}
             </p>
@@ -442,7 +491,7 @@ export function ResultsPanel({
               Execution Halted
             </h4>
             <p className="text-xs text-red-300/80 leading-relaxed font-sans">
-              {job.error_message || "The preprocessing pipeline failed to complete."}
+              {job.error_message || "This output has not passed the current integrity checks. Review the report or run the dataset again."}
             </p>
           </div>
         </motion.div>
@@ -456,10 +505,10 @@ export function ResultsPanel({
             <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
             <div>
               <h4 className="text-sm font-semibold text-emerald-200">
-                100% Deterministic Cleaning & Pandera Contracts Verified
+                Integrity and Validation Checks Passed
               </h4>
               <p className="text-xs text-emerald-300/70">
-                All structural invariants, arithmetic identities, and domain boundaries passed without human intervention.
+                Output matches the supported cleaning plan and passed the implemented validation checks.
               </p>
             </div>
           </div>
@@ -514,6 +563,7 @@ export function ResultsPanel({
       </div>
 
       {/* ── Actionable Next Steps & Production Handoff ──────────────────── */}
+      {passedVerification && (
       <div className="mb-6 bg-gradient-to-r from-blue-950/20 via-[#050505] to-cyan-950/20 border border-[#00F0FF]/20 rounded-2xl p-5 shadow-lg">
         <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-white/[0.08]">
           <div className="flex items-center gap-2.5">
@@ -536,12 +586,12 @@ export function ResultsPanel({
                 1. Analytics / BI Ready
               </div>
               <p className="text-gray-400 text-[11px] leading-relaxed">
-                Load the normalized CSV directly into Tableau, Power BI, Excel, or downstream analytics models. Whitespaces, sentinels, and dates are normalized.
+                Export the verified CSV for downstream analysis. Review its audit for the exact transformations and remaining domain assumptions.
               </p>
             </div>
             <button
               onClick={handleDownloadCsv}
-              disabled={isDownloading}
+              disabled={isDownloading || !canDownloadCandidate}
               className="mt-3 text-[11px] font-mono text-[#00F0FF] hover:underline flex items-center gap-1 self-start disabled:opacity-50"
             >
               Download CSV <ChevronRight className="w-3 h-3" />
@@ -556,7 +606,7 @@ export function ResultsPanel({
                 2. Automated Airflow / ETL
               </div>
               <p className="text-gray-400 text-[11px] leading-relaxed">
-                Deploy the generated Python script into your Airflow DAG, cron job, or AWS Lambda for repeatable cleaning on future raw files without LLM costs.
+                Review and test the generated script against future input contracts before scheduling it in your ETL system.
               </p>
             </div>
             <button
@@ -610,6 +660,8 @@ export function ResultsPanel({
           </div>
         </div>
       </div>
+
+      )}
 
       {/* ── Main Tabbed Panel ────────────────────────────────────────────── */}
       <div className="bg-[#020202] border border-white/[0.07] rounded-2xl overflow-hidden shadow-2xl">
@@ -755,7 +807,7 @@ export function ResultsPanel({
                           <h4 className="text-sm font-semibold text-white">Autonomous Cleaning Plan & Generated Code</h4>
                         </div>
                         <p className="text-xs font-mono text-gray-400">
-                          {planActions.length} planned actions executed • Generated Python pandas script ready for production
+                          {planActions.length} proposed actions • Check the audit to see which actions were applied or deferred
                         </p>
                       </div>
 
@@ -854,7 +906,7 @@ export function ResultsPanel({
                       <div className="flex items-center justify-between">
                         <h5 className="text-[10px] font-mono text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                           <Code2 className="w-3.5 h-3.5 text-[#00F0FF]" />
-                          Generated Production Python Code (`clean_data(df)`)
+                          Generated Python Code (`clean_data(df)`)
                         </h5>
                         <span className="text-[10px] font-mono text-gray-500">
                           Deterministic Pandas Script
@@ -1029,6 +1081,17 @@ export function ResultsPanel({
                 {/* ── TAB 6: PIPELINE LOGS & LANGSMITH TRACES ───────────────── */}
                 {activeTab === "logs" && (
                   <div>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <p role={traceError ? "alert" : undefined} className="text-xs font-mono text-amber-400">
+                        {traceError || (traces.some((trace) => trace.status === "pending")
+                          ? "Some trace completion updates have not yet arrived. Refreshing automatically."
+                          : "")}
+                      </p>
+                      <button type="button" onClick={() => setTraceRefresh((value) => value + 1)}
+                        className="text-xs font-mono text-gray-400 hover:text-white flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3" /> Refresh
+                      </button>
+                    </div>
                     {traces.length > 0 ? (
                       <>
                         <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2">
@@ -1049,7 +1112,7 @@ export function ResultsPanel({
                     ) : (
                       <div className="flex flex-col items-center justify-center py-16 gap-3">
                         <ScrollText className="w-8 h-8 text-gray-700" />
-                        <p className="text-sm font-mono text-gray-500">No LangSmith traces recorded for this job.</p>
+                        <p className="text-sm font-mono text-gray-500">No LangSmith traces available yet. Refreshing may take a few seconds.</p>
                       </div>
                     )}
                   </div>

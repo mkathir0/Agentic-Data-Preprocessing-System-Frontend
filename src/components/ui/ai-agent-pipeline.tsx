@@ -1,10 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { CheckCircle2 } from "lucide-react"
 
-type JobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
+export type JobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
 
 const PIPELINE_STAGES = [
   { key: "profile", label: "Profiling", sublabel: "node-01" },
@@ -52,8 +50,9 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
   const activeStage = getStageIndex(progress, status)
   const isCompleted = status === "COMPLETED"
   const isFailed = status === "FAILED"
-  const isRunning = status === "PROCESSING" || status === "PENDING"
-  const isReviewFlagged = isCompleted && currentStep === "REVIEW_FLAGGED"
+  const isQueued = status === "PENDING"
+  const isRunning = status === "PROCESSING"
+  const isReviewFlagged = currentStep === "REVIEW_FLAGGED"
 
   const paths = {
     p1: "M116,88 L158,88",
@@ -76,13 +75,21 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
     : "✓ Pipeline complete. Cleaned CSV and report are ready."
   const failedMessage = "✗ Pipeline failed. Max retries exceeded. Check the report for details."
 
-  const currentMessage = isFailed ? failedMessage : isCompleted ? completedMessage : (stageMessages[activeStage] ?? "Initializing pipeline...")
+  const currentMessage = isReviewFlagged
+    ? "Output preserved for review. Validation has not approved production use."
+    : isQueued
+    ? "Upload accepted and queued. If it stays here, start the backend worker: uv run python -m app.worker"
+    : isFailed
+    ? failedMessage
+    : isCompleted
+    ? completedMessage
+    : (stageMessages[activeStage] ?? "Initializing pipeline...")
 
   // Node state colors
   const nodeColor = (nodeIndex: number) => {
     if (isFailed && nodeIndex === activeStage) return { fill: "#1a0000", stroke: "#ef4444" }
     if (nodeIndex < activeStage || isCompleted) return { fill: "#001a00", stroke: "#22c55e" }
-    if (nodeIndex === activeStage) return { fill: "#020C17", stroke: "#00F0FF" }
+    if (nodeIndex === activeStage && !isQueued) return { fill: "#020C17", stroke: "#00F0FF" }
     return { fill: "#1A1A1A", stroke: "rgba(255,255,255,0.12)" }
   }
 
@@ -90,11 +97,12 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
   const dotColor = (nodeIndex: number) => {
     if (isFailed && nodeIndex === activeStage) return "#ef4444"
     if (nodeIndex < activeStage || isCompleted) return "#22c55e"
+    if (isQueued && nodeIndex === activeStage) return "#fbbf24"
     if (nodeIndex === activeStage) return "#00F0FF"
     return "rgba(255,255,255,0.15)"
   }
 
-  const dotPulsing = (nodeIndex: number) => !isCompleted && !isFailed && nodeIndex === activeStage
+  const dotPulsing = (nodeIndex: number) => isRunning && nodeIndex === activeStage
 
   return (
     <div className="bg-[#050505] border border-white/[0.08] rounded-[14px] overflow-hidden font-sans w-full max-w-[620px] mx-auto shadow-2xl">
@@ -106,17 +114,17 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
               isReviewFlagged ? "bg-amber-400 shadow-amber-400/80" :
               isCompleted ? "bg-green-500 shadow-green-500/80" :
               isFailed ? "bg-red-500 shadow-red-500/80" :
-              "bg-[#00F0FF] shadow-[#00F0FF]/80"
+              isQueued ? "bg-amber-400 shadow-amber-400/80" : "bg-[#00F0FF] shadow-[#00F0FF]/80"
             }`}
             animate={isRunning ? { opacity: [1, 0.2, 1] } : { opacity: 1 }}
             transition={{ duration: 2, repeat: isRunning ? Infinity : 0, ease: "easeInOut" }}
           />
           <span className="text-[10px] text-white/50 tracking-[0.1em] font-mono font-medium">
-            AGENT PIPELINE · {isReviewFlagged ? "REVIEW FLAGGED" : isCompleted ? "DONE" : isFailed ? "FAILED" : "LIVE"}
+            AGENT PIPELINE · {isReviewFlagged ? "REVIEW FLAGGED" : isCompleted ? "DONE" : isFailed ? "FAILED" : isQueued ? "QUEUED" : "LIVE"}
           </span>
         </div>
         <span className="text-[10px] text-white/[0.28] font-mono">
-          {isReviewFlagged ? "5/5 nodes · review flags" : isCompleted ? "5/5 nodes complete" : isFailed ? "pipeline halted" : `${activeStage}/5 nodes · ${progress.toFixed(0)}%`}
+          {isReviewFlagged ? "validation requires review" : isCompleted ? "5/5 nodes complete" : isFailed ? "pipeline halted" : isQueued ? "waiting for worker" : `${activeStage}/5 nodes · ${progress.toFixed(0)}%`}
         </span>
       </div>
 
@@ -189,7 +197,7 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
 
         {/* Output Nodes: Execute / Profile / Validate */}
         {(() => {
-          const execC = nodeColor(3); const profC = nodeColor(0); const valC = nodeColor(4);
+          const execC = nodeColor(3); const valC = nodeColor(4);
           return (
             <>
               <rect x="448" y="35" width="116" height="30" rx="7" fill={execC.fill} stroke={execC.stroke} strokeWidth="0.5" />
@@ -235,17 +243,17 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
       <div className="border-t border-white/[0.06] px-[18px] py-[10px] flex gap-[22px] items-center bg-black/60">
         <div>
           <div className="text-[9px] text-white/30 tracking-[0.09em] mb-[3px] font-semibold">STATUS</div>
-          <div className={`text-[14px] font-mono font-medium ${isReviewFlagged ? "text-amber-400" : isCompleted ? "text-green-400" : isFailed ? "text-red-400" : "text-[#00F0FF]"}`}>
-            {isReviewFlagged ? "⚠ REVIEW" : isCompleted ? "✓ DONE" : isFailed ? "✗ FAILED" : "LIVE"}
+          <div className={`text-[14px] font-mono font-medium ${isReviewFlagged || isQueued ? "text-amber-400" : isCompleted ? "text-green-400" : isFailed ? "text-red-400" : "text-[#00F0FF]"}`}>
+            {isReviewFlagged ? "⚠ REVIEW" : isCompleted ? "✓ DONE" : isFailed ? "✗ FAILED" : isQueued ? "QUEUED" : "LIVE"}
           </div>
         </div>
         <div>
           <div className="text-[9px] text-white/30 tracking-[0.09em] mb-[3px] font-semibold">PROGRESS</div>
-          <div className="text-[14px] text-white/[0.85] font-mono font-medium">{isCompleted ? "100%" : `${progress.toFixed(0)}%`}</div>
+          <div className="text-[14px] text-white/[0.85] font-mono font-medium">{isCompleted ? "100%" : isQueued ? "Waiting" : `${progress.toFixed(0)}%`}</div>
         </div>
         <div>
           <div className="text-[9px] text-white/30 tracking-[0.09em] mb-[3px] font-semibold">STAGE</div>
-          <div className="text-[14px] text-white/[0.85] font-mono font-medium">{isCompleted ? "Report" : PIPELINE_STAGES[Math.min(activeStage, 4)]?.label ?? "Init"}</div>
+          <div className="text-[14px] text-white/[0.85] font-mono font-medium">{isCompleted ? "Report" : isQueued ? "Queue" : PIPELINE_STAGES[Math.min(activeStage, 4)]?.label ?? "Init"}</div>
         </div>
         <div className="ml-auto text-right">
           <div className="text-[9px] text-white/[0.25] tracking-[0.09em] mb-[3px] font-semibold">STACK</div>

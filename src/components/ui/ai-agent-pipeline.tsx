@@ -64,10 +64,10 @@ export default function EnterpriseAIPipeline({ status = "PROCESSING", progress =
   // Derive the "current action" message from stage
   const stageMessages: Record<number, string> = {
     0: `Profiling "${filename ?? "dataset"}" — inferring schema, types, missing values...`,
-    1: "Groq LLM generating transformation plan based on anomaly report...",
+    1: "Groq LLM generating transformation plan based on profiling anomaly report...",
     2: "LLM writing pandas cleaning script tailored to dataset issues...",
     3: "Executing cleaning code in isolated Python subprocess...",
-    4: "Pandera running post-clean validation — checking for remaining anomalies...",
+    4: "Pandera verifying lazy schema contract, 4D quality score & 7-layer invariants...",
   }
   const completedMessage = "✓ Pipeline complete. Cleaned CSV and report are ready."
   const failedMessage = "✗ Pipeline failed. Max retries exceeded. Check the report for details."
